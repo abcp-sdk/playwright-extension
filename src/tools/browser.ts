@@ -714,8 +714,8 @@ export function pwTools(): Record<string, PwTool> {
           : await session.page.screenshot({ ...opts, fullPage })
       const file = await ingest(ctx, session, buf, mime, `screenshot-${Date.now()}.${type}`)
       return {
-        content: `Screenshot saved as ${file} (${mime}, ${buf.length} bytes)`,
-        data: { file, mime, bytes: buf.length },
+        content: `Screenshot saved as file:${file.code} (${mime}, ${buf.length} bytes)`,
+        data: { files: [file] },
       }
     },
   }
@@ -754,8 +754,8 @@ export function pwTools(): Record<string, PwTool> {
         })
       const file = await ingest(ctx, session, buf, 'application/pdf', `page-${Date.now()}.pdf`)
       return {
-        content: `PDF saved as ${file} (application/pdf, ${buf.length} bytes)`,
-        data: { file, mime: 'application/pdf', bytes: buf.length },
+        content: `PDF saved as file:${file.code} (application/pdf, ${buf.length} bytes)`,
+        data: { files: [file] },
       }
     },
   }
@@ -860,8 +860,8 @@ export function pwTools(): Record<string, PwTool> {
         `storage-state-${Date.now()}.json`,
       )
       return {
-        content: `Storage state saved as ${file} (${buf.length} bytes)`,
-        data: { file, mime: 'application/json', bytes: buf.length },
+        content: `Storage state saved as file:${file.code} (${buf.length} bytes)`,
+        data: { files: [file] },
       }
     },
   }
@@ -949,7 +949,7 @@ async function ingest(
   buf: Buffer,
   mime: string,
   name: string,
-): Promise<string> {
+): Promise<{ code: string; mime: string; name: string; bytes: number }> {
   const stored = await ctx.deps.ingestFile({
     name,
     mime,
@@ -957,7 +957,7 @@ async function ingest(
     session: session.session,
     tenant: session.tenant,
   })
-  return `file:${stored.code}`
+  return { code: stored.code, mime: stored.mime, name, bytes: buf.length }
 }
 
 /** Parse `/pattern/flags` or a bare regex into a RegExp. */

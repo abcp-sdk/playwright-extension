@@ -61,8 +61,8 @@ maybe('live e2e: extension against a CDP browser', () => {
     expect(snap.content).toContain('E2E')
 
     const shot = await call('browser-take-screenshot', { context_id: cid })
-    const file = (shot.data as { file?: string } | null)?.file ?? ''
-    expect(file).toMatch(/^file:[0-9a-f]{16}$/)
+    const files = (shot.data as { files?: Array<{ code?: string }> } | null)?.files ?? []
+    expect(files[0]?.code).toMatch(/^[0-9a-f]{16}$/)
 
     // Explicit close.
     await call('browser-close-context', { context_id: cid })

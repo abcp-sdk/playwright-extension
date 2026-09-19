@@ -1,6 +1,6 @@
 {
   "name": "@abc-protocol/playwright-extension",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Playwright browser extension server: CDP browser automation tools (navigate/snapshot/click/type/screenshot) served in-process over the abc protocol.",
   "type": "module",
   "main": "./src/index.ts",
