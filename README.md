@@ -45,12 +45,18 @@ Playwright's `aria-ref` engine against the last AI snapshot from
 | Env | Default | Meaning |
 |---|---|---|
 | `NATS_URL` | `nats://127.0.0.1:4222` | abc bus to serve over |
-| `PLAYWRIGHT_CDP_ENDPOINT` | **required** | CDP endpoint of the browser |
+| `PLAYWRIGHT_SELENIUM_URL` | — | Selenium WebDriver base URL (e.g. `http://selenium:4444`) |
+| `PLAYWRIGHT_CDP_ENDPOINT` | — | Raw CDP endpoint (used when `PLAYWRIGHT_SELENIUM_URL` is unset) |
+| `PLAYWRIGHT_BROWSER` | `chrome` | WebDriver browser name |
 | `PLAYWRIGHT_VIEWPORT` | (browser default) | e.g. `1280x720` |
 | `PLAYWRIGHT_IGNORE_HTTPS_ERRORS` | `true` | ignore TLS errors |
 | `PLAYWRIGHT_IDLE_TIMEOUT_MS` | `600000` | close idle contexts (0 disables) |
 | `PLAYWRIGHT_MAX_CONTEXTS` | `8` | live context cap (LRU-evict) |
 | `PLAYWRIGHT_ACTION_TIMEOUT_MS` | `30000` | default action timeout |
+
+One of `PLAYWRIGHT_SELENIUM_URL` / `PLAYWRIGHT_CDP_ENDPOINT` is required. For
+Selenium, each context creates a WebDriver session and attaches over the
+session's `se:cdp` capability; closing the context deletes the session.
 
 ## Build
 
@@ -62,6 +68,6 @@ Playwright's `aria-ref` engine against the last AI snapshot from
 
 ```bash
 NATS_URL=nats://nats:4222 \
-PLAYWRIGHT_CDP_ENDPOINT=http://chrome:9222 \
+PLAYWRIGHT_SELENIUM_URL=http://selenium:4444 \
 node dist/main.js
 ```

@@ -7,7 +7,7 @@ import {
 export interface ServePlaywrightOpts {
   /** NATS URL the extension connects to (shared with the agent). */
   natsUrl: string
-  /** Browser/extension tuning (CDP endpoint, timeouts, caps). */
+  /** Browser/extension tuning (target, timeouts, caps). */
   extension: Omit<PlaywrightExtensionOpts, 'deps'>
 }
 

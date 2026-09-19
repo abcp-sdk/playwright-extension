@@ -21,7 +21,7 @@ describe('playwright extension registration', () => {
     const { stop } = await servePlaywright({
       natsUrl: url,
       extension: {
-        cdpEndpoint: 'http://127.0.0.1:9222',
+        target: { kind: 'cdp', endpoint: 'http://127.0.0.1:9222' },
         viewport: null,
         ignoreHttpsErrors: true,
         idleTimeoutMs: 0,

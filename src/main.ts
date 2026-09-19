@@ -18,17 +18,27 @@ function viewportEnv(): { width: number; height: number } | null {
 
 async function main(): Promise<void> {
   const natsUrl = process.env['NATS_URL'] ?? 'nats://127.0.0.1:4222'
+  const seleniumUrl = process.env['PLAYWRIGHT_SELENIUM_URL'] ?? ''
   const cdpEndpoint = process.env['PLAYWRIGHT_CDP_ENDPOINT'] ?? ''
-  if (cdpEndpoint === '') {
+  if (seleniumUrl === '' && cdpEndpoint === '') {
     throw new Error(
-      'PLAYWRIGHT_CDP_ENDPOINT is required (a Chromium/CDP endpoint, e.g. the Selenium node CDP URL or http://chrome:9222)',
+      'one of PLAYWRIGHT_SELENIUM_URL (Selenium/standalone-chrome base URL) or PLAYWRIGHT_CDP_ENDPOINT (raw CDP endpoint) is required',
     )
   }
+  const target: import('./index.js').BrowserTarget =
+    seleniumUrl !== ''
+      ? {
+          kind: 'selenium',
+          baseUrl: seleniumUrl,
+          browserName: process.env['PLAYWRIGHT_BROWSER'] ?? 'chrome',
+          cdpTimeoutMs: intEnv('PLAYWRIGHT_CDP_TIMEOUT_MS', 30_000),
+        }
+      : { kind: 'cdp', endpoint: cdpEndpoint }
 
   const { stop } = await servePlaywright({
     natsUrl,
     extension: {
-      cdpEndpoint,
+      target,
       viewport: viewportEnv(),
       ignoreHttpsErrors: process.env['PLAYWRIGHT_IGNORE_HTTPS_ERRORS'] !== 'false',
       idleTimeoutMs: intEnv('PLAYWRIGHT_IDLE_TIMEOUT_MS', 600_000),
@@ -38,7 +48,9 @@ async function main(): Promise<void> {
   })
 
   console.log(
-    `[playwright] serving over ${natsUrl} -> CDP ${cdpEndpoint} (idle=${intEnv('PLAYWRIGHT_IDLE_TIMEOUT_MS', 600_000)}ms, max=${intEnv('PLAYWRIGHT_MAX_CONTEXTS', 8)})`,
+    `[playwright] serving over ${natsUrl} -> ${
+      seleniumUrl !== '' ? `selenium ${seleniumUrl}` : `cdp ${cdpEndpoint}`
+    } (idle=${intEnv('PLAYWRIGHT_IDLE_TIMEOUT_MS', 600_000)}ms, max=${intEnv('PLAYWRIGHT_MAX_CONTEXTS', 8)})`,
   )
 
   const shutdown = (): void => {

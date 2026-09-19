@@ -2,6 +2,7 @@ import type { ExtensionConfig, ToolSpec } from '@abc-protocol/sdk'
 import type { PlaywrightDeps } from './deps.js'
 import { agentFileDeps } from './deps.js'
 import { CdpBrowserFactory } from './browser.js'
+import { SeleniumBrowserFactory } from './selenium.js'
 import {
   ContextManager,
   type BrowserSession,
@@ -17,12 +18,28 @@ import {
 
 export * from './deps.js'
 export * from './browser.js'
+export * from './selenium.js'
 export * from './context-manager.js'
 export * from './tools/browser.js'
 
+/** How the extension reaches the browser. */
+export type BrowserTarget =
+  | {
+      /** Selenium (Grid/standalone-chrome) WebDriver base URL. */
+      kind: 'selenium'
+      baseUrl: string
+      browserName: string
+      cdpTimeoutMs: number
+    }
+  | {
+      /** Raw CDP endpoint (headless Chrome / browserless). */
+      kind: 'cdp'
+      endpoint: string
+    }
+
 export interface PlaywrightExtensionOpts {
-  /** CDP endpoint of the browser to drive (Selenium node / headless Chrome). */
-  cdpEndpoint: string
+  /** How to reach the browser. */
+  target: BrowserTarget
   /** Per-context viewport; null uses the browser default. */
   viewport: { width: number; height: number } | null
   ignoreHttpsErrors: boolean
@@ -56,11 +73,24 @@ export function createPlaywrightExtension(
 ): PlaywrightExtensionBundle {
   const deps = opts.deps ?? agentFileDeps(bus)
 
-  const factory = new CdpBrowserFactory({
-    endpoint: opts.cdpEndpoint,
-    viewport: opts.viewport,
-    ignoreHttpsErrors: opts.ignoreHttpsErrors,
-  })
+  const cdpFactory =
+    opts.target.kind === 'cdp'
+      ? new CdpBrowserFactory({
+          endpoint: opts.target.endpoint,
+          viewport: opts.viewport,
+          ignoreHttpsErrors: opts.ignoreHttpsErrors,
+        })
+      : null
+  const seleniumFactory =
+    opts.target.kind === 'selenium'
+      ? new SeleniumBrowserFactory({
+          baseUrl: opts.target.baseUrl,
+          browserName: opts.target.browserName,
+          viewport: opts.viewport,
+          ignoreHttpsErrors: opts.ignoreHttpsErrors,
+          cdpTimeoutMs: opts.target.cdpTimeoutMs,
+        })
+      : null
 
   // Per-context log stores, keyed by context_id (the manager owns the context
   // lifecycle; logs live alongside it).
@@ -70,17 +100,36 @@ export function createPlaywrightExtension(
     idleTimeoutMs: opts.idleTimeoutMs,
     maxContexts: opts.maxContexts,
     createBrowser: async () => {
-      const { browser, page } = await factory.create()
-      return {
-        browser,
-        context: page.context(),
-        page,
-        driverSessionId: null,
+      if (seleniumFactory !== null) {
+        const s = await seleniumFactory.create()
+        return {
+          browser: s.browser,
+          context: s.page.context(),
+          page: s.page,
+          driverSessionId: s.sessionId,
+        }
       }
+      if (cdpFactory !== null) {
+        const { browser, page } = await cdpFactory.create()
+        return {
+          browser,
+          context: page.context(),
+          page,
+          driverSessionId: null,
+        }
+      }
+      throw new Error('no browser target configured')
     },
     destroyBrowser: async (s: BrowserSession) => {
       logsByContext.delete(s.contextId)
-      await factory.closePage(s.page)
+      if (s.driverSessionId !== null && seleniumFactory !== null) {
+        // The WebDriver session owns the browser; deleting it closes the
+        // context+pages and frees the Grid slot. Disconnect CDP after.
+        await seleniumFactory.deleteSession(s.driverSessionId).catch(() => {})
+        await s.browser.close().catch(() => {})
+      } else {
+        await s.page.context().close().catch(() => {})
+      }
     },
     onError: () => {},
   }
@@ -173,7 +222,7 @@ export function createPlaywrightExtension(
     manager,
     stop: async () => {
       await manager.stop()
-      await factory.disconnect()
+      await cdpFactory?.disconnect()
     },
   }
 }
