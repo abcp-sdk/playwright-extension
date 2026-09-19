@@ -8,10 +8,10 @@ import { ingestFileViaAgent, getFileViaAgent } from '@abc-protocol/sdk'
  */
 export interface PlaywrightDeps {
   /** Persist arbitrary bytes through the agent and return the canonical
-   *  `file:<code>` (the same value an image-generation tool returns). */
+   *  `file:<code>` plus the agent-derived content type. The caller supplies no
+   *  mime: the agent derives it from the bytes. */
   ingestFile: (input: {
     name: string
-    mime: string
     data: Uint8Array
     session?: string
     tenant?: string
@@ -30,19 +30,18 @@ export interface PlaywrightDeps {
  */
 export function agentFileDeps(bus: Bus): PlaywrightDeps {
   return {
-    ingestFile: async ({ name, mime, data, session, tenant }) => {
+    ingestFile: async ({ name, data, session, tenant }) => {
       if (tenant === undefined || tenant === '') {
         throw new Error('ingestFile: tenant required')
       }
-      const code = await ingestFileViaAgent(bus, tenant, {
+      const stored = await ingestFileViaAgent(bus, tenant, {
         name,
-        mime,
         data,
         ...(session !== undefined && session !== ''
           ? { sessionName: session }
           : {}),
       })
-      return { code, mime }
+      return stored
     },
     getFile: async (code, tenant) => {
       if (tenant === undefined || tenant === '') {

@@ -711,15 +711,14 @@ export function pwTools(): Record<string, PwTool> {
       const target = strArg(args, 'target')
       const fullPage = boolArg(args, 'fullPage') ?? false
       const type = (strArg(args, 'type') || 'png') as 'png' | 'jpeg' | 'webp'
-      const mime = type === 'png' ? 'image/png' : `image/${type}`
       const opts = { type } as const
       const buf =
         target !== ''
           ? await resolveLocator(session.page, target).screenshot(opts)
           : await session.page.screenshot({ ...opts, fullPage })
-      const file = await ingest(ctx, session, buf, mime, `screenshot-${Date.now()}.${type}`)
+      const file = await ingest(ctx, session, buf, `screenshot-${Date.now()}.${type}`)
       return {
-        content: `Screenshot saved as file:${file.code} (${mime}, ${buf.length} bytes)`,
+        content: `Screenshot saved as file:${file.code} (${file.mime}, ${buf.length} bytes)`,
         data: { files: [file] },
       }
     },
@@ -757,9 +756,9 @@ export function pwTools(): Record<string, PwTool> {
             `pdf failed (PDF is only supported in headless Chromium): ${e instanceof Error ? e.message : String(e)}`,
           )
         })
-      const file = await ingest(ctx, session, buf, 'application/pdf', `page-${Date.now()}.pdf`)
+      const file = await ingest(ctx, session, buf, `page-${Date.now()}.pdf`)
       return {
-        content: `PDF saved as file:${file.code} (application/pdf, ${buf.length} bytes)`,
+        content: `PDF saved as file:${file.code} (${file.mime}, ${buf.length} bytes)`,
         data: { files: [file] },
       }
     },
@@ -861,7 +860,6 @@ export function pwTools(): Record<string, PwTool> {
         ctx,
         session,
         buf,
-        'application/json',
         `storage-state-${Date.now()}.json`,
       )
       return {
@@ -952,12 +950,10 @@ async function ingest(
   ctx: ToolCtx,
   session: BrowserSession,
   buf: Buffer,
-  mime: string,
   name: string,
 ): Promise<{ code: string; mime: string; name: string; bytes: number }> {
   const stored = await ctx.deps.ingestFile({
     name,
-    mime,
     data: new Uint8Array(buf),
     session: session.session,
     tenant: session.tenant,
