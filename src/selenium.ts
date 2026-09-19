@@ -43,24 +43,31 @@ export class SeleniumBrowserFactory {
 
   /** Create a WebDriver session and attach Playwright over its se:cdp URL. */
   async create(): Promise<SeleniumSession> {
-    const res = await fetch(this.url('/session'), {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({
-        capabilities: {
-          alwaysMatch: {
-            browserName: this.opts.browserName,
-            'se:cdp': true,
-            'se:cdpVersion': '1.3',
-            // Playwright drives the browser over CDP; keep the Grid from
-            // rejecting the attach with its default origin checks.
-            'goog:chromeOptions': {
-              args: ['--no-sandbox', '--disable-dev-shm-usage'],
+    let res: Response
+    try {
+      res = await fetch(this.url('/session'), {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          capabilities: {
+            alwaysMatch: {
+              browserName: this.opts.browserName,
+              'se:cdp': true,
+              'se:cdpVersion': '1.3',
+              // Playwright drives the browser over CDP; keep the Grid from
+              // rejecting the attach with its default origin checks.
+              'goog:chromeOptions': {
+                args: ['--no-sandbox', '--disable-dev-shm-usage'],
+              },
             },
           },
-        },
-      }),
-    })
+        }),
+      })
+    } catch (e) {
+      throw new Error(
+        `cannot reach Selenium at ${this.opts.baseUrl}/session — is the Selenium node running? (${e instanceof Error ? e.message : String(e)})`,
+      )
+    }
     if (!res.ok) {
       throw new Error(
         `selenium create session failed: ${res.status} ${await res.text()}`,
