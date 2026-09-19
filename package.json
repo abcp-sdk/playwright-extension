@@ -16,7 +16,7 @@
     "manifest.yaml"
   ],
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "build": "tsc --emitDeclarationOnly && node scripts/bundle.mjs",
     "check": "tsc --noEmit",
     "test": "vitest run"
   },
@@ -28,6 +28,10 @@
   "devDependencies": {
     "@types/node": "^26.2.0",
     "typescript": "^7.0.2",
-    "vitest": "^4.1.11"
+    "vitest": "^4.1.11",
+    "esbuild": "^0.25.0"
+  },
+  "allowScripts": {
+    "esbuild@0.25.12": true
   }
 }

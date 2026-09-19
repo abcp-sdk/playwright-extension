@@ -1,7 +1,8 @@
 # syntax=docker/dockerfile:1
 # The extension drives a REMOTE browser over CDP, so no Chromium is bundled or
-# downloaded (PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD) — only playwright-core, the
-# abc protocol SDK, and this package's compiled output.
+# downloaded (PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD). The build runs esbuild so the
+# runtime image needs no transpiler: `@abc-protocol/sdk` is a git dependency
+# that ships raw `.ts`, which the container's Node cannot execute directly.
 ARG REGISTRY=docker.io
 FROM ${REGISTRY}/root/node:26-alpine AS build
 ARG HTTP_PROXY
@@ -11,7 +12,8 @@ ENV HTTP_PROXY=${HTTP_PROXY} \
     NO_PROXY=localhost,127.0.0.1,.svc.cluster.local,.svc \
     PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
 WORKDIR /build
-COPY package.json .npmrc tsconfig.json ./
+COPY package.json package-lock.json .npmrc tsconfig.json ./
+COPY scripts scripts
 COPY src src
 RUN npm install --no-audit --strict-ssl=false && npm run build
 
@@ -19,8 +21,10 @@ FROM ${REGISTRY}/root/alpine:3.24
 RUN sed -i 's|dl-cdn.alpinelinux.org|mirrors.aliyun.com|g' /etc/apk/repositories \
     && apk add --no-cache ca-certificates nodejs
 WORKDIR /app
-COPY --from=build /build/node_modules node_modules
-COPY --from=build /build/dist dist
+# playwright-core is external (a real package resolved at runtime); everything
+# else is inlined into dist/main.js.
+COPY --from=build /build/node_modules/playwright-core node_modules/playwright-core
+COPY --from=build /build/dist/main.js dist/main.js
 COPY --from=build /build/package.json package.json
 EXPOSE 8080
 CMD ["node", "dist/main.js"]
