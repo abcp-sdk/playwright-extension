@@ -1,5 +1,10 @@
 import type { Bus } from '@abc-protocol/sdk'
-import { ingestFileViaAgent, getFileViaAgent } from '@abc-protocol/sdk'
+import {
+  getFileViaAgent,
+  ingestFileViaAgent,
+  sessionVarKey,
+  VARS_BUCKET,
+} from '@abc-protocol/sdk'
 
 /**
  * The runtime surface the playwright extension relies on. The agent supplies
@@ -22,6 +27,16 @@ export interface PlaywrightDeps {
     code: string,
     tenant?: string,
   ) => Promise<{ data: Uint8Array; name: string; mime: string }>
+  /**
+   * Read a session variable the agent projects (vars bucket, provider "agent"),
+   * e.g. `locale`. Returns '' when unset. Used to localize tool results.
+   */
+  getSessionVariable: (
+    tenant: string,
+    provider: string,
+    sessionName: string,
+    name: string,
+  ) => Promise<string>
 }
 
 /**
@@ -53,6 +68,18 @@ export function agentFileDeps(bus: Bus): PlaywrightDeps {
         data: got.data,
         name: got.meta.name,
         mime: got.meta.mime,
+      }
+    },
+    getSessionVariable: async (tenant, provider, sessionName, name) => {
+      if (sessionName === '') return ''
+      try {
+        const v = await bus.kvGet(
+          VARS_BUCKET,
+          sessionVarKey(tenant, provider, sessionName, name),
+        )
+        return v ?? ''
+      } catch {
+        return ''
       }
     },
   }

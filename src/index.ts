@@ -3,6 +3,7 @@ import type { PlaywrightDeps } from './deps.js'
 import { agentFileDeps } from './deps.js'
 import { CdpBrowserFactory } from './browser.js'
 import { SeleniumBrowserFactory } from './selenium.js'
+import { localeOf, tr } from './i18n.js'
 import {
   ContextManager,
   type BrowserSession,
@@ -139,7 +140,7 @@ export function createPlaywrightExtension(
   const tools = pwTools()
   const specs: Record<string, ToolSpec> = {}
 
-  const toolCtx = (session: BrowserSession): ToolCtx => {
+  const toolCtx = (session: BrowserSession, locale: string): ToolCtx => {
     let logs = logsByContext.get(session.contextId)
     if (logs === undefined) {
       logs = newContextLogs()
@@ -150,6 +151,7 @@ export function createPlaywrightExtension(
       deps,
       logs,
       defaultTimeoutMs: opts.defaultTimeoutMs,
+      locale,
     }
   }
 
@@ -162,18 +164,17 @@ export function createPlaywrightExtension(
       inputSchema: tool.inputSchema,
       execute: async (args, _callId, sessionName, _signal, tenant) => {
         const t = tenant ?? ''
+        const locale = await localeOf(deps, t, sessionName ?? '')
         const contextId = String(args['context_id'] ?? '')
         if (contextId === '') {
-          throw new Error(
-            'context_id is required — call browser-create-context first',
-          )
+          throw new Error(tr(locale, 'contextIdRequired'))
         }
         const result = await manager.withContext(
           contextId,
           t,
           sessionName,
           async session => {
-            const ctx = toolCtx(session)
+            const ctx = toolCtx(session, locale)
             const clean = { ...args }
             delete clean['context_id']
             return tool.exec(ctx, session, clean)
@@ -193,6 +194,7 @@ export function createPlaywrightExtension(
     description: createTool?.description ?? 'Create a browser context',
     inputSchema: { type: 'object', properties: {} },
     execute: async (_args, _callId, sessionName, _signal, tenant) => {
+      const locale = await localeOf(deps, tenant ?? '', sessionName ?? '')
       const contextId = await manager.create(tenant ?? '', sessionName ?? '')
       // Attach logging to the new page.
       const session = manager.get(contextId, tenant ?? '', sessionName ?? '')
@@ -200,7 +202,7 @@ export function createPlaywrightExtension(
       logsByContext.set(contextId, logs)
       wirePageLogging(session.page, logs)
       return {
-        content: `Created browser context. context_id: ${contextId}`,
+        content: tr(locale, 'createdContext', { id: contextId }),
         data: { context_id: contextId },
       }
     },
@@ -214,17 +216,18 @@ export function createPlaywrightExtension(
     inputSchema: closeTool?.inputSchema ?? { type: 'object', properties: {} },
     execute: async (args, _callId, sessionName, _signal, tenant) => {
       const t = tenant ?? ''
+      const locale = await localeOf(deps, t, sessionName ?? '')
       if (args['all'] === true) {
         const n = await manager.closeSession(t, sessionName ?? '')
-        return { content: `Closed ${n} browser context(s)` }
+        return { content: tr(locale, 'closedContexts', { n }) }
       }
       const contextId = String(args['context_id'] ?? '')
       if (contextId === '') {
-        throw new Error('context_id is required unless all=true')
+        throw new Error(tr(locale, 'contextIdRequiredUnlessAll'))
       }
       await manager.close(contextId, t, sessionName ?? '')
       logsByContext.delete(contextId)
-      return { content: `Closed browser context ${contextId}` }
+      return { content: tr(locale, 'closedContext', { id: contextId }) }
     },
   }
 

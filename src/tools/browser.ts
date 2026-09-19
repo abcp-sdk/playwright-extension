@@ -1,6 +1,7 @@
 import type { ConsoleMessage, Page, Request } from 'playwright-core'
 import type { ToolSpec } from '@abc-protocol/sdk'
 import type { PlaywrightDeps } from '../deps.js'
+import { tr } from '../i18n.js'
 import type { ContextManager, BrowserSession } from '../context-manager.js'
 import {
   boolArg,
@@ -20,6 +21,8 @@ export interface ToolCtx {
   /** Per-context console + network logs (kept by the extension, not the page). */
   logs: ContextLogs
   defaultTimeoutMs: number
+  /** Session locale for result text ('' => English fallback). */
+  locale?: string
 }
 
 /**
@@ -178,19 +181,19 @@ export function pwTools(): Record<string, PwTool> {
       { url: { type: 'string', description: 'The URL to navigate to' } },
       ['url'],
     ),
-    exec: async (_ctx, session, args) => {
+    exec: async (ctx, session, args) => {
       const url = requireArg(args, 'url')
       await session.page.goto(url, { waitUntil: 'domcontentloaded' })
-      return { content: `Navigated to ${url}` }
+      return { content: tr(ctx.locale ?? 'en', 'navigated', { url }) }
     },
   }
 
   const navigateBack: PwTool = {
     description: 'Go back to the previous page in the history',
     inputSchema: schema({}, []),
-    exec: async (_ctx, session) => {
+    exec: async (ctx, session) => {
       await session.page.goBack({ waitUntil: 'domcontentloaded' })
-      return { content: `Went back to ${session.page.url()}` }
+      return { content: tr(ctx.locale ?? 'en', 'wentBack', { url: session.page.url() }) }
     },
   }
 
@@ -237,7 +240,7 @@ export function pwTools(): Record<string, PwTool> {
       },
       ['target'],
     ),
-    exec: async (_ctx, session, args) => {
+    exec: async (ctx, session, args) => {
       const target = requireArg(args, 'target')
       const loc = resolveLocator(session.page, target)
       const dbl = boolArg(args, 'doubleClick') ?? false
@@ -250,7 +253,7 @@ export function pwTools(): Record<string, PwTool> {
         button,
         ...(modifiers.length > 0 ? { modifiers } : {}),
       })
-      return { content: `Clicked ${strArg(args, 'element') || target}` }
+      return { content: tr(ctx.locale ?? 'en', 'clicked', { target: strArg(args, 'element') || target }) }
     },
   }
 
@@ -266,7 +269,7 @@ export function pwTools(): Record<string, PwTool> {
       },
       ['target', 'text'],
     ),
-    exec: async (_ctx, session, args) => {
+    exec: async (ctx, session, args) => {
       const target = requireArg(args, 'target')
       const text = requireArg(args, 'text')
       const loc = resolveLocator(session.page, target)
@@ -276,7 +279,7 @@ export function pwTools(): Record<string, PwTool> {
         await loc.fill(text)
       }
       if (boolArg(args, 'submit') === true) await loc.press('Enter')
-      return { content: `Typed into ${strArg(args, 'element') || target}` }
+      return { content: tr(ctx.locale ?? 'en', 'typed', { target: strArg(args, 'element') || target }) }
     },
   }
 
@@ -286,10 +289,10 @@ export function pwTools(): Record<string, PwTool> {
       { element: ELEMENT_PROP.element, target: TARGET_PROP.target },
       ['target'],
     ),
-    exec: async (_ctx, session, args) => {
+    exec: async (ctx, session, args) => {
       const target = requireArg(args, 'target')
       await resolveLocator(session.page, target).hover()
-      return { content: `Hovered ${strArg(args, 'element') || target}` }
+      return { content: tr(ctx.locale ?? 'en', 'hovered', { target: strArg(args, 'element') || target }) }
     },
   }
 
@@ -307,11 +310,11 @@ export function pwTools(): Record<string, PwTool> {
       },
       ['target', 'values'],
     ),
-    exec: async (_ctx, session, args) => {
+    exec: async (ctx, session, args) => {
       const target = requireArg(args, 'target')
       const values = strArray(args, 'values')
       await resolveLocator(session.page, target).selectOption(values)
-      return { content: `Selected ${values.join(', ')}` }
+      return { content: tr(ctx.locale ?? 'en', 'selected', { values: values.join(', ') }) }
     },
   }
 
@@ -321,10 +324,10 @@ export function pwTools(): Record<string, PwTool> {
       { key: { type: 'string', description: 'Name of the key or a character' } },
       ['key'],
     ),
-    exec: async (_ctx, session, args) => {
+    exec: async (ctx, session, args) => {
       const key = requireArg(args, 'key')
       await session.page.keyboard.press(key)
-      return { content: `Pressed ${key}` }
+      return { content: tr(ctx.locale ?? 'en', 'pressed', { key }) }
     },
   }
 
@@ -338,7 +341,7 @@ export function pwTools(): Record<string, PwTool> {
       },
       [],
     ),
-    exec: async (_ctx, session, args) => {
+    exec: async (ctx, session, args) => {
       const time = numArg(args, 'time')
       const text = strArg(args, 'text')
       const textGone = strArg(args, 'textGone')
@@ -349,7 +352,7 @@ export function pwTools(): Record<string, PwTool> {
       if (textGone !== '') {
         await session.page.getByText(textGone).first().waitFor({ state: 'hidden' })
       }
-      return { content: 'Wait completed' }
+      return { content: tr(ctx.locale ?? 'en', 'waitCompleted') }
     },
   }
 
@@ -362,11 +365,11 @@ export function pwTools(): Record<string, PwTool> {
       },
       ['width', 'height'],
     ),
-    exec: async (_ctx, session, args) => {
+    exec: async (ctx, session, args) => {
       const width = numArg(args, 'width') ?? 0
       const height = numArg(args, 'height') ?? 0
       await session.page.setViewportSize({ width, height })
-      return { content: `Resized to ${width}x${height}` }
+      return { content: tr(ctx.locale ?? 'en', 'resized', { w: width, h: height }) }
     },
   }
 
@@ -380,7 +383,7 @@ export function pwTools(): Record<string, PwTool> {
       },
       ['action'],
     ),
-    exec: async (_ctx, session, args) => {
+    exec: async (ctx, session, args) => {
       const action = requireArg(args, 'action')
       const context = session.context
       const pages = context.pages()
@@ -396,30 +399,30 @@ export function pwTools(): Record<string, PwTool> {
           const url = strArg(args, 'url')
           if (url !== '') await p.goto(url, { waitUntil: 'domcontentloaded' })
           session.page = p
-          return { content: `Opened tab ${context.pages().length - 1}` }
+          return { content: tr(ctx.locale ?? 'en', 'openedTab', { index: context.pages().length - 1 }) }
         }
         case 'select': {
           const idx = numArg(args, 'index')
           if (idx === undefined || idx < 0 || idx >= pages.length) {
-            throw new Error(`invalid tab index ${String(idx)}`)
+            throw new Error(tr(ctx.locale ?? 'en', 'invalidTabIndex', { index: String(idx) }))
           }
           const p = pages[idx]
-          if (p === undefined) throw new Error(`invalid tab index ${idx}`)
+          if (p === undefined) throw new Error(tr(ctx.locale ?? 'en', 'invalidTabIndex', { index: idx }))
           await p.bringToFront()
           session.page = p
-          return { content: `Selected tab ${idx}` }
+          return { content: tr(ctx.locale ?? 'en', 'selectedTab', { index: idx }) }
         }
         case 'close': {
           const idx = numArg(args, 'index')
           const p = idx === undefined ? session.page : pages[idx]
-          if (p === undefined) throw new Error(`invalid tab index ${String(idx)}`)
+          if (p === undefined) throw new Error(tr(ctx.locale ?? 'en', 'invalidTabIndex', { index: String(idx) }))
           await p.close()
           const first = context.pages()[0]
           if (first !== undefined) session.page = first
-          return { content: 'Closed tab' }
+          return { content: tr(ctx.locale ?? 'en', 'closedTab') }
         }
         default:
-          throw new Error(`unknown tabs action: ${action}`)
+          throw new Error(tr(ctx.locale ?? 'en', 'unknownTabsAction', { action }))
       }
     },
   }
@@ -435,11 +438,11 @@ export function pwTools(): Record<string, PwTool> {
       },
       ['startTarget', 'endTarget'],
     ),
-    exec: async (_ctx, session, args) => {
+    exec: async (ctx, session, args) => {
       const start = resolveLocator(session.page, requireArg(args, 'startTarget'))
       const end = resolveLocator(session.page, requireArg(args, 'endTarget'))
       await start.dragTo(end)
-      return { content: 'Dragged element' }
+      return { content: tr(ctx.locale ?? 'en', 'dragged') }
     },
   }
 
@@ -467,7 +470,7 @@ export function pwTools(): Record<string, PwTool> {
       },
       ['fields'],
     ),
-    exec: async (_ctx, session, args) => {
+    exec: async (ctx, session, args) => {
       const fields = Array.isArray(args['fields']) ? args['fields'] : []
       const done: string[] = []
       for (const f of fields as Array<Record<string, unknown>>) {
@@ -485,7 +488,7 @@ export function pwTools(): Record<string, PwTool> {
         }
         done.push(`${String(f['name'] ?? target)}=${value}`)
       }
-      return { content: `Filled: ${done.join(', ')}` }
+      return { content: tr(ctx.locale ?? 'en', 'filled', { fields: done.join(', ') }) }
     },
   }
 
@@ -499,7 +502,7 @@ export function pwTools(): Record<string, PwTool> {
       },
       ['accept'],
     ),
-    exec: async (_ctx, session, args) => {
+    exec: async (ctx, session, args) => {
       const accept = boolArg(args, 'accept') ?? true
       const promptText = strArg(args, 'promptText')
       session.page.once('dialog', d => {
@@ -508,7 +511,13 @@ export function pwTools(): Record<string, PwTool> {
           : d.dismiss()
         void action.catch(() => {})
       })
-      return { content: `Next dialog will be ${accept ? 'accepted' : 'dismissed'}` }
+      return {
+        content: tr(ctx.locale ?? 'en', 'nextDialog', {
+          state: accept
+            ? tr(ctx.locale ?? 'en', 'dialogAccepted')
+            : tr(ctx.locale ?? 'en', 'dialogDismissed'),
+        }),
+      }
     },
   }
 
@@ -573,7 +582,7 @@ export function pwTools(): Record<string, PwTool> {
       },
       [],
     ),
-    exec: async (_ctx, session, args) => {
+    exec: async (ctx, session, args) => {
       const snap = await captureSnapshot(session.page)
       const text = strArg(args, 'text')
       const regexRaw = strArg(args, 'regex')
@@ -585,10 +594,12 @@ export function pwTools(): Record<string, PwTool> {
         const re = parseSlashRegex(regexRaw)
         matcher = l => re.test(l)
       } else {
-        throw new Error('provide either text or regex')
+        throw new Error(tr(ctx.locale ?? 'en', 'provideTextOrRegex'))
       }
       const hits = snap.split('\n').filter(matcher)
-      return { content: hits.length === 0 ? 'No matches.' : hits.join('\n') }
+      return {
+        content: hits.length === 0 ? tr(ctx.locale ?? 'en', 'noMatches') : hits.join('\n'),
+      }
     },
   }
 
@@ -622,7 +633,7 @@ export function pwTools(): Record<string, PwTool> {
       return {
         content:
           filtered.length === 0
-            ? 'No console messages.'
+            ? tr(ctx.locale ?? 'en', 'noConsoleMessages')
             : filtered
                 .map(m => `[${m.type}] ${m.text} (${m.location})`)
                 .join('\n'),
@@ -653,7 +664,7 @@ export function pwTools(): Record<string, PwTool> {
       return {
         content:
           rows.length === 0
-            ? 'No network requests.'
+            ? tr(ctx.locale ?? 'en', 'noNetworkRequests')
             : rows
                 .map((r, i) => `${i + 1}. ${r.method} ${r.url} -> ${r.status}`)
                 .join('\n'),
@@ -681,7 +692,7 @@ export function pwTools(): Record<string, PwTool> {
       const index = numArg(args, 'index') ?? 0
       const rows = ctx.logs.requests.filter(r => !isStatic(r))
       const rec = rows[index - 1]
-      if (rec === undefined) throw new Error(`no request at index ${index}`)
+      if (rec === undefined) throw new Error(tr(ctx.locale ?? 'en', 'noRequestAtIndex', { index }))
       const part = strArg(args, 'part')
       if (part === 'request-headers') return { content: render(rec.requestHeaders) }
       if (part === 'response-headers') return { content: render(rec.responseHeaders) }
@@ -718,7 +729,11 @@ export function pwTools(): Record<string, PwTool> {
           : await session.page.screenshot({ ...opts, fullPage })
       const file = await ingest(ctx, session, buf, `screenshot-${Date.now()}.${type}`)
       return {
-        content: `Screenshot saved as file:${file.code} (${file.mime}, ${buf.length} bytes)`,
+        content: tr(ctx.locale ?? 'en', 'screenshotSaved', {
+          code: file.code,
+          mime: file.mime,
+          bytes: buf.length,
+        }),
         data: { files: [file] },
       }
     },
@@ -753,12 +768,18 @@ export function pwTools(): Record<string, PwTool> {
         })
         .catch(e => {
           throw new Error(
-            `pdf failed (PDF is only supported in headless Chromium): ${e instanceof Error ? e.message : String(e)}`,
+            tr(ctx.locale ?? 'en', 'pdfHeadlessOnly', {
+              detail: e instanceof Error ? e.message : String(e),
+            }),
           )
         })
       const file = await ingest(ctx, session, buf, `page-${Date.now()}.pdf`)
       return {
-        content: `PDF saved as file:${file.code} (${file.mime}, ${buf.length} bytes)`,
+        content: tr(ctx.locale ?? 'en', 'pdfSaved', {
+          code: file.code,
+          mime: file.mime,
+          bytes: buf.length,
+        }),
         data: { files: [file] },
       }
     },
@@ -779,7 +800,7 @@ export function pwTools(): Record<string, PwTool> {
     ),
     exec: async (ctx, session, args) => {
       const codes = strArray(args, 'codes')
-      if (codes.length === 0) throw new Error('codes is required')
+      if (codes.length === 0) throw new Error(tr(ctx.locale ?? 'en', 'codesRequired'))
       const files: Array<{ name: string; mimeType: string; buffer: Buffer }> = []
       for (const code of codes) {
         const got = await ctx.deps.getFile(code, session.tenant)
@@ -791,7 +812,7 @@ export function pwTools(): Record<string, PwTool> {
       }
       const input = session.page.locator('input[type=file]').first()
       await input.setInputFiles(files)
-      return { content: `Uploaded ${files.length} file(s)` }
+      return { content: tr(ctx.locale ?? 'en', 'uploadedFiles', { n: files.length }) }
     },
   }
 
@@ -845,7 +866,7 @@ export function pwTools(): Record<string, PwTool> {
         { data, files },
       )
       await locator.dispatchEvent('drop', { dataTransfer: handle })
-      return { content: `Dropped onto ${strArg(args, 'element') || target}` }
+      return { content: tr(ctx.locale ?? 'en', 'dropped', { target: strArg(args, 'element') || target }) }
     },
   }
 
@@ -863,7 +884,10 @@ export function pwTools(): Record<string, PwTool> {
         `storage-state-${Date.now()}.json`,
       )
       return {
-        content: `Storage state saved as file:${file.code} (${buf.length} bytes)`,
+        content: tr(ctx.locale ?? 'en', 'storageStateSaved', {
+          code: file.code,
+          bytes: buf.length,
+        }),
         data: { files: [file] },
       }
     },
@@ -905,7 +929,7 @@ export function pwTools(): Record<string, PwTool> {
           await page.close()
         }
       }
-      return { content: `Storage state restored from file:${code}` }
+      return { content: tr(ctx.locale ?? 'en', 'storageStateRestored', { code }) }
     },
   }
 
