@@ -528,10 +528,15 @@ export function pwTools(): Record<string, PwTool> {
     exec: async (_ctx, session, args) => {
       const fn = requireArg(args, 'function')
       const target = strArg(args, 'target')
+      // `page.evaluate("() => {...}")` would treat the string as an EXPRESSION
+      // (evaluating to a function object that is never called). Wrap it so the
+      // user's function is actually INVOKED with the page (or the element).
+      const pageFn = new Function('arg', `return (${fn})(arg)`)
+      const elemFn = new Function('el', 'arg', `return (${fn})(el, arg)`)
       const result =
         target !== ''
-          ? await resolveLocator(session.page, target).evaluate(fn)
-          : await session.page.evaluate(fn)
+          ? await resolveLocator(session.page, target).evaluate(elemFn as never)
+          : await session.page.evaluate(pageFn as never)
       return { content: render(result) }
     },
   }
