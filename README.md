@@ -9,7 +9,7 @@ tools (Playwright core) over NATS. It drives a **remote** Chromium over CDP
 
 - **Own process, own repo.** The agent discovers it over `abc.discover` plus an
   `abc-presence` heartbeat; no agent/easylab code change is required.
-- **One context key.** `browser_create_context` opens an isolated
+- **One context key.** `browser-create-context` opens an isolated
   `BrowserContext` on the shared CDP browser and returns a `context_id` (UUID).
   Every other tool takes that `context_id`; the key is bound to the calling
   `(tenant, session)` so it cannot be used elsewhere.
@@ -24,21 +24,47 @@ tools (Playwright core) over NATS. It drives a **remote** Chromium over CDP
 
 ## Tools
 
-Official `playwright-mcp` core tool names, each with a required `context_id`:
+kebab-case names, curated from the official `playwright-mcp` surface down to
+the **28** tools that are either commonly used or cannot be expressed as plain
+`page.*` calls. Each takes a required `context_id` (except
+`browser-create-context`, and `browser-close-context` with `all: true`).
 
-`browser_navigate`, `browser_navigate_back`, `browser_snapshot`,
-`browser_click`, `browser_type`, `browser_hover`, `browser_select_option`,
-`browser_take_screenshot`, `browser_wait_for`, `browser_press_key`,
-`browser_evaluate`, `browser_resize`, `browser_tabs`,
-`browser_console_messages`, `browser_network_requests`,
-`browser_network_request`, `browser_handle_dialog`, `browser_drag`,
-`browser_find`, `browser_run_code_unsafe`, `browser_fill_form`,
-`browser_emulate_media`, `browser_file_upload`, plus
-`browser_create_context`.
+**Session**
+`browser-create-context`, `browser-close-context` (one, or `all: true`)
+
+**Navigation / inspection**
+`browser-navigate`, `browser-navigate-back`, `browser-snapshot`, `browser-find`
+
+**Interaction**
+`browser-click`, `browser-type`, `browser-hover`, `browser-select-option`,
+`browser-press-key`, `browser-wait-for`, `browser-resize`, `browser-tabs`,
+`browser-drag`, `browser-fill-form`, `browser-handle-dialog`,
+`browser-evaluate`
+
+**Observability** (historical; not expressible via `page.*`)
+`browser-console-messages`, `browser-network-requests`,
+`browser-network-request`
+
+**Files** (bytes routed through the agent, returned as `file:<code>`)
+`browser-take-screenshot`, `browser-pdf-save`, `browser-file-upload`,
+`browser-drop`, `browser-storage-state`, `browser-set-storage-state`
+
+**Escape hatch**
+`browser-run-code-unsafe` — runs a Playwright snippet with `page`. Use it for
+anything not covered above: mouse coordinates, network routes
+(`page.route`/`context.setOffline`), cookies/localStorage/sessionStorage,
+`page.emulateMedia`, and assertions.
+
+Deliberately **not** tools (Thin `page.*` wrappers, better done via
+`browser-run-code-unsafe`): mouse-coordinate tools, `verify-*`/`generate-locator`,
+per-kind cookie/local/sessionstorage tools, `route*`/`network-state-set`,
+`emulate-media`, `get-config`. Also not tools: the Playwright Dashboard /
+recorder / debugger family (annotate, highlight, resume, recording, tracing,
+video) — unsupported over a bare remote CDP target.
 
 `target` arguments accept either a snapshot `ref` (e.g. `e12`, resolved via
 Playwright's `aria-ref` engine against the last AI snapshot from
-`browser_snapshot`) or a normal Playwright selector.
+`browser-snapshot`) or a normal Playwright selector.
 
 ## Configuration (environment)
 

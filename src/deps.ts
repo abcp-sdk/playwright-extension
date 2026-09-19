@@ -16,8 +16,8 @@ export interface PlaywrightDeps {
     session?: string
     tenant?: string
   }) => Promise<{ code: string; mime: string }>
-  /** Fetch stored bytes through the agent (used by browser_file_upload and
-   *  browser_drop when given a `file:<code>`). */
+  /** Fetch stored bytes through the agent (used by browser-file-upload and
+   *  browser-drop when given a `file:<code>`). */
   getFile: (
     code: string,
     tenant?: string,

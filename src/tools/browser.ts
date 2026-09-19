@@ -1,4 +1,4 @@
-import type { BrowserContext, ConsoleMessage, Page, Request } from 'playwright-core'
+import type { ConsoleMessage, Page, Request } from 'playwright-core'
 import type { ToolSpec } from '@abc-protocol/sdk'
 import type { PlaywrightDeps } from '../deps.js'
 import type { ContextManager, BrowserSession } from '../context-manager.js'
@@ -25,11 +25,11 @@ export interface ToolCtx {
 /**
  * Per-context captured telemetry (console messages + network requests since the
  * context was created). The official server keeps these in-session; we key them
- * by context_id so browser_console_messages / browser_network_requests work.
+ * by context_id so browser-console-messages / browser-network-requests work.
  */
 export interface ContextLogs {
   console: Array<{ type: string; text: string; location: string }>
-  /** Page load counter used by `all=false` (since last navigation). */
+  /** Console index at the last main-frame navigation (for `all=false`). */
   navMark: number
   requests: Array<{
     method: string
@@ -38,16 +38,14 @@ export interface ContextLogs {
     resourceType: string
     requestHeaders: Record<string, string>
     responseHeaders: Record<string, string>
-    body?: string
   }>
-  dialogs: Array<{ type: string; message: string }>
 }
 
 export function newContextLogs(): ContextLogs {
-  return { console: [], navMark: 0, requests: [], dialogs: [] }
+  return { console: [], navMark: 0, requests: [] }
 }
 
-/** Attach console/network/dialog collectors to a fresh page. */
+/** Attach console/network collectors to a fresh page. */
 export function wirePageLogging(page: Page, logs: ContextLogs): void {
   page.on('console', (msg: ConsoleMessage) => {
     logs.console.push({
@@ -67,9 +65,7 @@ export function wirePageLogging(page: Page, logs: ContextLogs): void {
     })
   })
   page.on('response', res => {
-    const rec = logs.requests.find(
-      r => r.url === res.url() && r.status === 0,
-    )
+    const rec = logs.requests.find(r => r.url === res.url() && r.status === 0)
     if (rec !== undefined) {
       rec.status = res.status()
       rec.responseHeaders = res.headers()
@@ -78,12 +74,9 @@ export function wirePageLogging(page: Page, logs: ContextLogs): void {
   page.on('framenavigated', frame => {
     if (frame === page.mainFrame()) logs.navMark = logs.console.length
   })
-  page.on('dialog', dialog => {
-    logs.dialogs.push({ type: dialog.type(), message: dialog.message() })
-  })
 }
 
-/** A tool handler receives the resolved session + raw args. */
+/** A tool handler receives the resolved session + raw args (no context_id). */
 type Exec = (
   ctx: ToolCtx,
   session: BrowserSession,
@@ -96,14 +89,11 @@ export interface PwTool {
   exec: Exec
 }
 
-// Every browser tool takes the context_id FIRST so the extension can route to
-// the right live browser context; the remaining properties mirror the official
-// playwright-mcp schemas.
 const CONTEXT_PROP = {
   context_id: {
     type: 'string',
     description:
-      'The browser context key returned by browser_create_context. Required: browser sessions are created explicitly and reused across calls.',
+      'The browser context key returned by browser-create-context. Required: browser sessions are created explicitly and reused across calls.',
   },
 } as const
 
@@ -122,14 +112,6 @@ const ELEMENT_PROP = {
   },
 } as const
 
-const SCREENSHOT_SCALE_PROP = {
-  scale: {
-    type: 'string',
-    enum: ['css', 'device'],
-    description: 'Screenshot resolution scale. Default is css.',
-  },
-} as const
-
 function schema(
   properties: Record<string, unknown>,
   required: string[],
@@ -142,58 +124,61 @@ function schema(
 }
 
 /** Strip the context_id (consumed by the router) from the args. */
-function argsWithoutContext(
+export function argsWithoutContext(
   args: Record<string, unknown>,
 ): Record<string, unknown> {
   const { context_id: _ignored, ...rest } = args
   return rest
 }
 
-// ---- image helpers ----
-
-async function ingestImage(
-  ctx: ToolCtx,
-  session: BrowserSession,
-  buf: Buffer,
-  mime: string,
-  name: string,
-): Promise<string> {
-  const stored = await ctx.deps.ingestFile({
-    name,
-    mime,
-    data: new Uint8Array(buf),
-    session: session.session,
-    tenant: session.tenant,
-  })
-  return `file:${stored.code}`
-}
-
-// ---- tool definitions ----
-
+/**
+ * The full tool set (28). Everything the model can do on a page lives here;
+ * thin wrappers that only forward to `page.*` (coordinates, verify*, storage
+ * get/set, routes, media emulation) are intentionally NOT tools — the model
+ * uses browser-run-code-unsafe for those. What remains are the commonly used
+ * interactions plus the operations that CANNOT be expressed as `page.*`
+ * (agent file ingest for produced files, historical logs, tab/session
+ * lifecycle).
+ */
 export function pwTools(): Record<string, PwTool> {
   const ctxCreate: PwTool = {
     description:
-      'Create a new browser context and return its context_id. Every other browser tool requires this context_id, and the context (cookies, storage, tabs) persists across calls until browser_close_context, an idle timeout, or the session is deleted.',
+      'Create a new browser context and return its context_id. Every other browser tool requires this context_id, and the context (cookies, storage, tabs) persists across calls until browser-close-context, an idle timeout, or the session is deleted.',
+    inputSchema: { type: 'object', properties: {} },
+    exec: async () => {
+      throw new Error('browser-create-context is handled by the router')
+    },
+  }
+
+  const ctxClose: PwTool = {
+    description:
+      'Close a browser context (or all of them). Pass context_id to close one context; pass all=true to close every context of this session. Closing a context releases its browser (WebDriver session).',
     inputSchema: {
       type: 'object',
       properties: {
-        ...CONTEXT_PROP,
+        context_id: {
+          type: 'string',
+          description: 'The context to close. Ignored when all=true.',
+        },
+        all: {
+          type: 'boolean',
+          description: 'Close every context of this session instead of one.',
+        },
       },
       required: [],
     },
     exec: async () => {
-      // Handled specially by the router (it mints the key).
-      throw new Error('browser_create_context is handled by the router')
+      throw new Error('browser-close-context is handled by the router')
     },
   }
 
-  const withLogs = <T>(fn: () => Promise<T>): Promise<T> => fn()
-  void withLogs
-
   const navigate: PwTool = {
     description: 'Navigate to a URL',
-    inputSchema: schema({ url: { type: 'string', description: 'The URL to navigate to' } }, ['url']),
-    exec: async (ctx, session, args) => {
+    inputSchema: schema(
+      { url: { type: 'string', description: 'The URL to navigate to' } },
+      ['url'],
+    ),
+    exec: async (_ctx, session, args) => {
       const url = requireArg(args, 'url')
       await session.page.goto(url, { waitUntil: 'domcontentloaded' })
       return { content: `Navigated to ${url}` }
@@ -244,7 +229,11 @@ export function pwTools(): Record<string, PwTool> {
         target: TARGET_PROP.target,
         doubleClick: { type: 'boolean', description: 'Perform a double click' },
         button: { type: 'string', description: 'Button to click, defaults to left' },
-        modifiers: { type: 'array', items: { type: 'string' }, description: 'Modifier keys' },
+        modifiers: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'Modifier keys',
+        },
       },
       ['target'],
     ),
@@ -310,7 +299,11 @@ export function pwTools(): Record<string, PwTool> {
       {
         element: ELEMENT_PROP.element,
         target: TARGET_PROP.target,
-        values: { type: 'array', items: { type: 'string' }, description: 'Values to select' },
+        values: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'Values to select',
+        },
       },
       ['target', 'values'],
     ),
@@ -319,65 +312,6 @@ export function pwTools(): Record<string, PwTool> {
       const values = strArray(args, 'values')
       await resolveLocator(session.page, target).selectOption(values)
       return { content: `Selected ${values.join(', ')}` }
-    },
-  }
-
-  const takeScreenshot: PwTool = {
-    description:
-      "Take a screenshot of the current page. The image is stored and returned as a file:<code> reference (like image generation); use browser_snapshot for actions.",
-    inputSchema: schema(
-      {
-        element: ELEMENT_PROP.element,
-        target: TARGET_PROP.target,
-        type: { type: 'string', enum: ['png', 'jpeg', 'webp'], description: 'Image format' },
-        fullPage: { type: 'boolean', description: 'Capture the full scrollable page' },
-        ...SCREENSHOT_SCALE_PROP,
-      },
-      [],
-    ),
-    exec: async (ctx, session, args) => {
-      const target = strArg(args, 'target')
-      const fullPage = boolArg(args, 'fullPage') ?? false
-      const type = (strArg(args, 'type') || 'png') as 'png' | 'jpeg' | 'webp'
-      const mime = type === 'png' ? 'image/png' : `image/${type}`
-      const opts = { type } as const
-      const buf =
-        target !== ''
-          ? await resolveLocator(session.page, target).screenshot(opts)
-          : await session.page.screenshot({ ...opts, fullPage })
-      const ref = await ingestImage(
-        ctx,
-        session,
-        buf,
-        mime,
-        `screenshot-${Date.now()}.${type}`,
-      )
-      return {
-        content: `Screenshot saved as ${ref} (${mime}, ${buf.length} bytes)`,
-        data: { file: ref, mime, bytes: buf.length },
-      }
-    },
-  }
-
-  const waitFor: PwTool = {
-    description:
-      'Wait for text to appear or disappear or a specified time to pass',
-    inputSchema: schema(
-      {
-        time: { type: 'number', description: 'The time to wait in seconds' },
-        text: { type: 'string', description: 'The text to wait for' },
-        textGone: { type: 'string', description: 'The text to wait to disappear' },
-      },
-      [],
-    ),
-    exec: async (_ctx, session, args) => {
-      const time = numArg(args, 'time')
-      const text = strArg(args, 'text')
-      const textGone = strArg(args, 'textGone')
-      if (time !== undefined) await session.page.waitForTimeout(time * 1000)
-      if (text !== '') await session.page.getByText(text).first().waitFor({ state: 'visible' })
-      if (textGone !== '') await session.page.getByText(textGone).first().waitFor({ state: 'hidden' })
-      return { content: 'Wait completed' }
     },
   }
 
@@ -394,27 +328,28 @@ export function pwTools(): Record<string, PwTool> {
     },
   }
 
-  const evaluate: PwTool = {
-    description: 'Evaluate JavaScript expression on page or element',
+  const waitFor: PwTool = {
+    description: 'Wait for text to appear or disappear or a specified time to pass',
     inputSchema: schema(
       {
-        element: ELEMENT_PROP.element,
-        target: TARGET_PROP.target,
-        function: {
-          type: 'string',
-          description: '() => { /* code */ } or (element) => { /* code */ }',
-        },
+        time: { type: 'number', description: 'The time to wait in seconds' },
+        text: { type: 'string', description: 'The text to wait for' },
+        textGone: { type: 'string', description: 'The text to wait to disappear' },
       },
-      ['function'],
+      [],
     ),
     exec: async (_ctx, session, args) => {
-      const fn = requireArg(args, 'function')
-      const target = strArg(args, 'target')
-      const result =
-        target !== ''
-          ? await resolveLocator(session.page, target).evaluate(fn)
-          : await session.page.evaluate(fn)
-      return { content: render(result) }
+      const time = numArg(args, 'time')
+      const text = strArg(args, 'text')
+      const textGone = strArg(args, 'textGone')
+      if (time !== undefined) await session.page.waitForTimeout(time * 1000)
+      if (text !== '') {
+        await session.page.getByText(text).first().waitFor({ state: 'visible' })
+      }
+      if (textGone !== '') {
+        await session.page.getByText(textGone).first().waitFor({ state: 'hidden' })
+      }
+      return { content: 'Wait completed' }
     },
   }
 
@@ -479,8 +414,7 @@ export function pwTools(): Record<string, PwTool> {
           const p = idx === undefined ? session.page : pages[idx]
           if (p === undefined) throw new Error(`invalid tab index ${String(idx)}`)
           await p.close()
-          const remaining = context.pages()
-          const first = remaining[0]
+          const first = context.pages()[0]
           if (first !== undefined) session.page = first
           return { content: 'Closed tab' }
         }
@@ -489,6 +423,171 @@ export function pwTools(): Record<string, PwTool> {
       }
     },
   }
+
+  const drag: PwTool = {
+    description: 'Perform drag and drop between two elements',
+    inputSchema: schema(
+      {
+        startElement: { type: 'string' },
+        startTarget: TARGET_PROP.target,
+        endElement: { type: 'string' },
+        endTarget: TARGET_PROP.target,
+      },
+      ['startTarget', 'endTarget'],
+    ),
+    exec: async (_ctx, session, args) => {
+      const start = resolveLocator(session.page, requireArg(args, 'startTarget'))
+      const end = resolveLocator(session.page, requireArg(args, 'endTarget'))
+      await start.dragTo(end)
+      return { content: 'Dragged element' }
+    },
+  }
+
+  const fillForm: PwTool = {
+    description: 'Fill multiple form fields',
+    inputSchema: schema(
+      {
+        fields: {
+          type: 'array',
+          description: 'Fields to fill in',
+          items: {
+            type: 'object',
+            properties: {
+              name: { type: 'string' },
+              target: { type: 'string' },
+              type: {
+                type: 'string',
+                enum: ['textbox', 'checkbox', 'radio', 'combobox', 'slider'],
+              },
+              value: { type: 'string' },
+            },
+            required: ['name', 'target', 'type', 'value'],
+          },
+        },
+      },
+      ['fields'],
+    ),
+    exec: async (_ctx, session, args) => {
+      const fields = Array.isArray(args['fields']) ? args['fields'] : []
+      const done: string[] = []
+      for (const f of fields as Array<Record<string, unknown>>) {
+        const target = String(f['target'] ?? '')
+        const value = String(f['value'] ?? '')
+        const kind = String(f['type'] ?? 'textbox')
+        const loc = resolveLocator(session.page, target)
+        if (kind === 'checkbox' || kind === 'radio') {
+          if (value === 'true') await loc.check()
+          else await loc.uncheck()
+        } else if (kind === 'combobox') {
+          await loc.selectOption(value)
+        } else {
+          await loc.fill(value)
+        }
+        done.push(`${String(f['name'] ?? target)}=${value}`)
+      }
+      return { content: `Filled: ${done.join(', ')}` }
+    },
+  }
+
+  const handleDialog: PwTool = {
+    description:
+      'Handle the next JavaScript dialog (alert/confirm/prompt): accept or dismiss it.',
+    inputSchema: schema(
+      {
+        accept: { type: 'boolean', description: 'Whether to accept the dialog' },
+        promptText: { type: 'string', description: 'Prompt text' },
+      },
+      ['accept'],
+    ),
+    exec: async (_ctx, session, args) => {
+      const accept = boolArg(args, 'accept') ?? true
+      const promptText = strArg(args, 'promptText')
+      session.page.once('dialog', d => {
+        const action = accept
+          ? d.accept(promptText !== '' ? promptText : undefined)
+          : d.dismiss()
+        void action.catch(() => {})
+      })
+      return { content: `Next dialog will be ${accept ? 'accepted' : 'dismissed'}` }
+    },
+  }
+
+  const evaluate: PwTool = {
+    description: 'Evaluate JavaScript expression on page or element',
+    inputSchema: schema(
+      {
+        element: ELEMENT_PROP.element,
+        target: TARGET_PROP.target,
+        function: {
+          type: 'string',
+          description: '() => { /* code */ } or (element) => { /* code */ }',
+        },
+      },
+      ['function'],
+    ),
+    exec: async (_ctx, session, args) => {
+      const fn = requireArg(args, 'function')
+      const target = strArg(args, 'target')
+      const result =
+        target !== ''
+          ? await resolveLocator(session.page, target).evaluate(fn)
+          : await session.page.evaluate(fn)
+      return { content: render(result) }
+    },
+  }
+
+  const runCodeUnsafe: PwTool = {
+    description:
+      'Run a Playwright code snippet. Unsafe: executes arbitrary JavaScript in the Playwright server process and is RCE-equivalent. Use it for anything the dedicated tools do not cover (coordinates, routes, storage, media emulation, assertions).',
+    inputSchema: schema(
+      {
+        code: {
+          type: 'string',
+          description: 'A JavaScript function receiving `page` as its single argument',
+        },
+      },
+      ['code'],
+    ),
+    exec: async (_ctx, session, args) => {
+      const code = requireArg(args, 'code')
+      const AsyncFunction = Object.getPrototypeOf(async () => {})
+        .constructor as new (...a: string[]) => (page: Page) => Promise<unknown>
+      const fn = new AsyncFunction('page', `return (${code})(page)`)
+      const result = await fn(session.page)
+      return { content: render(result) }
+    },
+  }
+
+  const find: PwTool = {
+    description:
+      'Search the accessibility snapshot of the current page for text or a regular expression. Returns matching snapshot lines.',
+    inputSchema: schema(
+      {
+        text: { type: 'string', description: 'Plain text to search for' },
+        regex: { type: 'string', description: 'Regular expression to search for' },
+      },
+      [],
+    ),
+    exec: async (_ctx, session, args) => {
+      const snap = await captureSnapshot(session.page)
+      const text = strArg(args, 'text')
+      const regexRaw = strArg(args, 'regex')
+      let matcher: (line: string) => boolean
+      if (text !== '') {
+        const needle = text.toLowerCase()
+        matcher = l => l.toLowerCase().includes(needle)
+      } else if (regexRaw !== '') {
+        const re = parseSlashRegex(regexRaw)
+        matcher = l => re.test(l)
+      } else {
+        throw new Error('provide either text or regex')
+      }
+      const hits = snap.split('\n').filter(matcher)
+      return { content: hits.length === 0 ? 'No matches.' : hits.join('\n') }
+    },
+  }
+
+  // ---- observability (historical logs; not expressible via page.*) ----
 
   const consoleMessages: PwTool = {
     description: 'Returns all console messages',
@@ -506,7 +605,7 @@ export function pwTools(): Record<string, PwTool> {
       },
       [],
     ),
-    exec: async (ctx, session, args) => {
+    exec: async (ctx, _session, args) => {
       const logs = ctx.logs
       const level = strArg(args, 'level') || 'info'
       const order = ['error', 'warning', 'info', 'debug']
@@ -543,43 +642,39 @@ export function pwTools(): Record<string, PwTool> {
       const includeStatic = boolArg(args, 'static') ?? false
       const filterRaw = strArg(args, 'filter')
       const filter = filterRaw !== '' ? new RegExp(filterRaw) : null
-      const staticTypes = new Set(['image', 'font', 'stylesheet', 'script', 'media'])
-      const rows = ctx.logs.requests.filter(r => {
-        if (!includeStatic && staticTypes.has(r.resourceType) && r.status < 400) {
-          return false
-        }
-        if (filter !== null && !filter.test(r.url)) return false
-        return true
-      })
+      const rows = ctx.logs.requests.filter(
+        r => (includeStatic || !isStatic(r)) && (filter === null || filter.test(r.url)),
+      )
       return {
         content:
           rows.length === 0
             ? 'No network requests.'
-            : rows.map((r, i) => `${i + 1}. ${r.method} ${r.url} -> ${r.status}`).join('\n'),
+            : rows
+                .map((r, i) => `${i + 1}. ${r.method} ${r.url} -> ${r.status}`)
+                .join('\n'),
       }
     },
   }
 
   const networkRequest: PwTool = {
     description:
-      'Returns full details (headers and body) of a single network request.',
+      'Returns full details (headers) of a single network request. Use the number from browser-network-requests.',
     inputSchema: schema(
       {
-        index: { type: 'number', description: '1-based index from browser_network_requests' },
+        index: {
+          type: 'number',
+          description: '1-based index from browser-network-requests',
+        },
         part: {
           type: 'string',
-          enum: ['request-headers', 'request-body', 'response-headers', 'response-body'],
+          enum: ['request-headers', 'response-headers'],
         },
       },
       ['index'],
     ),
     exec: async (ctx, _session, args) => {
       const index = numArg(args, 'index') ?? 0
-      const includeStatic = false
-      const staticTypes = new Set(['image', 'font', 'stylesheet', 'script', 'media'])
-      const rows = ctx.logs.requests.filter(
-        r => includeStatic || !(staticTypes.has(r.resourceType) && r.status < 400),
-      )
+      const rows = ctx.logs.requests.filter(r => !isStatic(r))
       const rec = rows[index - 1]
       if (rec === undefined) throw new Error(`no request at index ${index}`)
       const part = strArg(args, 'part')
@@ -589,174 +684,91 @@ export function pwTools(): Record<string, PwTool> {
     },
   }
 
-  const dialog: PwTool = {
-    description: 'Handle a dialog',
-    inputSchema: schema(
-      {
-        accept: { type: 'boolean', description: 'Whether to accept the dialog' },
-        promptText: { type: 'string', description: 'Prompt text' },
-      },
-      ['accept'],
-    ),
-    exec: async (_ctx, session, args) => {
-      // Dialogs are auto-dismissed by Playwright unless a handler is set; the
-      // official server records them. We accept/dismiss the NEXT dialog.
-      const accept = boolArg(args, 'accept') ?? true
-      const promptText = strArg(args, 'promptText')
-      session.page.once('dialog', d => {
-        void d.accept(promptText !== '' ? promptText : undefined).catch(() => {})
-      })
-      return { content: `Next dialog will be ${accept ? 'accepted' : 'dismissed'}` }
-    },
-  }
+  // ---- file-producing tools (need the agent ingest; not expressible as page.*) ----
 
-  const drag: PwTool = {
-    description: 'Perform drag and drop between two elements',
-    inputSchema: schema(
-      {
-        startElement: { type: 'string' },
-        startTarget: TARGET_PROP.target,
-        endElement: { type: 'string' },
-        endTarget: TARGET_PROP.target,
-      },
-      ['startTarget', 'endTarget'],
-    ),
-    exec: async (_ctx, session, args) => {
-      const start = resolveLocator(session.page, requireArg(args, 'startTarget'))
-      const end = resolveLocator(session.page, requireArg(args, 'endTarget'))
-      await start.dragTo(end)
-      return { content: 'Dragged element' }
-    },
-  }
-
-  const find: PwTool = {
+  const takeScreenshot: PwTool = {
     description:
-      'Search the accessibility snapshot of the current page for text or a regular expression.',
+      'Take a screenshot of the current page. The image is stored and returned as a file:<code> reference (like image generation); use browser-snapshot for actions.',
     inputSchema: schema(
       {
-        text: { type: 'string', description: 'Plain text to search for' },
-        regex: { type: 'string', description: 'Regular expression to search for' },
-      },
-      [],
-    ),
-    exec: async (_ctx, session, args) => {
-      const snap = await captureSnapshot(session.page)
-      const text = strArg(args, 'text')
-      const regexRaw = strArg(args, 'regex')
-      const lines = snap.split('\n')
-      let matcher: (line: string) => boolean
-      if (text !== '') {
-        const needle = text.toLowerCase()
-        matcher = l => l.toLowerCase().includes(needle)
-      } else if (regexRaw !== '') {
-        const re = parseSlashRegex(regexRaw)
-        matcher = l => re.test(l)
-      } else {
-        throw new Error('provide either text or regex')
-      }
-      const hits = lines.filter(matcher)
-      return {
-        content: hits.length === 0 ? 'No matches.' : hits.join('\n'),
-      }
-    },
-  }
-
-  const runCodeUnsafe: PwTool = {
-    description:
-      'Run a Playwright code snippet. Unsafe: executes arbitrary JavaScript in the Playwright server process and is RCE-equivalent.',
-    inputSchema: schema(
-      {
-        code: {
+        element: ELEMENT_PROP.element,
+        target: TARGET_PROP.target,
+        type: {
           type: 'string',
-          description:
-            'A JavaScript function receiving `page` as its single argument',
+          enum: ['png', 'jpeg', 'webp'],
+          description: 'Image format',
         },
-      },
-      ['code'],
-    ),
-    exec: async (_ctx, session, args) => {
-      const code = requireArg(args, 'code')
-      const AsyncFunction = Object.getPrototypeOf(async () => {}).constructor as new (
-        ...a: string[]
-      ) => (page: Page) => Promise<unknown>
-      const fn = new AsyncFunction('page', `return (${code})(page)`)
-      const result = await fn(session.page)
-      return { content: render(result) }
-    },
-  }
-
-  const fillForm: PwTool = {
-    description: 'Fill multiple form fields',
-    inputSchema: schema(
-      {
-        fields: {
-          type: 'array',
-          description: 'Fields to fill in',
-          items: {
-            type: 'object',
-            properties: {
-              name: { type: 'string' },
-              target: { type: 'string' },
-              type: { type: 'string', enum: ['textbox', 'checkbox', 'radio', 'combobox', 'slider'] },
-              value: { type: 'string' },
-            },
-            required: ['name', 'target', 'type', 'value'],
-          },
-        },
-      },
-      ['fields'],
-    ),
-    exec: async (_ctx, session, args) => {
-      const fields = Array.isArray(args['fields']) ? args['fields'] : []
-      const done: string[] = []
-      for (const f of fields as Array<Record<string, unknown>>) {
-        const target = String(f['target'] ?? '')
-        const value = String(f['value'] ?? '')
-        const kind = String(f['type'] ?? 'textbox')
-        const loc = resolveLocator(session.page, target)
-        if (kind === 'checkbox' || kind === 'radio') {
-          if (value === 'true') await loc.check()
-          else await loc.uncheck()
-        } else if (kind === 'combobox') {
-          await loc.selectOption(value)
-        } else {
-          await loc.fill(value)
-        }
-        done.push(`${String(f['name'] ?? target)}=${value}`)
-      }
-      return { content: `Filled: ${done.join(', ')}` }
-    },
-  }
-
-  const emulateMedia: PwTool = {
-    description: 'Emulate CSS media features for the page.',
-    inputSchema: schema(
-      {
-        colorScheme: { type: 'string', enum: ['light', 'dark', 'no-preference'] },
-        reducedMotion: { type: 'string', enum: ['reduce', 'no-preference'] },
-        media: { type: 'string', enum: ['screen', 'print'] },
+        fullPage: { type: 'boolean', description: 'Capture the full scrollable page' },
       },
       [],
     ),
-    exec: async (_ctx, session, args) => {
-      const opts: Record<string, string> = {}
-      for (const k of ['colorScheme', 'reducedMotion', 'media'] as const) {
-        const v = strArg(args, k)
-        if (v !== '') opts[k] = v
+    exec: async (ctx, session, args) => {
+      const target = strArg(args, 'target')
+      const fullPage = boolArg(args, 'fullPage') ?? false
+      const type = (strArg(args, 'type') || 'png') as 'png' | 'jpeg' | 'webp'
+      const mime = type === 'png' ? 'image/png' : `image/${type}`
+      const opts = { type } as const
+      const buf =
+        target !== ''
+          ? await resolveLocator(session.page, target).screenshot(opts)
+          : await session.page.screenshot({ ...opts, fullPage })
+      const file = await ingest(ctx, session, buf, mime, `screenshot-${Date.now()}.${type}`)
+      return {
+        content: `Screenshot saved as ${file} (${mime}, ${buf.length} bytes)`,
+        data: { file, mime, bytes: buf.length },
       }
-      await session.page.emulateMedia(opts)
-      return { content: 'Media emulation applied' }
+    },
+  }
+
+  const pdfSave: PwTool = {
+    description:
+      'Save the page as a PDF (headless Chromium only). The PDF is stored and returned as a file:<code> reference.',
+    inputSchema: schema(
+      {
+        format: {
+          type: 'string',
+          description: 'Paper format, e.g. A4, Letter (default: browser default).',
+        },
+        landscape: { type: 'boolean', description: 'Landscape orientation' },
+        printBackground: {
+          type: 'boolean',
+          description: 'Print background graphics (default false)',
+        },
+      },
+      [],
+    ),
+    exec: async (ctx, session, args) => {
+      const format = strArg(args, 'format')
+      const landscape = boolArg(args, 'landscape')
+      const printBackground = boolArg(args, 'printBackground')
+      const buf = await session.page
+        .pdf({
+          ...(format !== '' ? { format } : {}),
+          ...(landscape !== undefined ? { landscape } : {}),
+          ...(printBackground !== undefined ? { printBackground } : {}),
+        })
+        .catch(e => {
+          throw new Error(
+            `pdf failed (PDF is only supported in headless Chromium): ${e instanceof Error ? e.message : String(e)}`,
+          )
+        })
+      const file = await ingest(ctx, session, buf, 'application/pdf', `page-${Date.now()}.pdf`)
+      return {
+        content: `PDF saved as ${file} (application/pdf, ${buf.length} bytes)`,
+        data: { file, mime: 'application/pdf', bytes: buf.length },
+      }
     },
   }
 
   const fileUpload: PwTool = {
-    description: 'Upload one or multiple files referenced as file:<code>.',
+    description:
+      'Upload one or more stored files (referenced as file:<code>) to the page file chooser / first file input.',
     inputSchema: schema(
       {
         codes: {
           type: 'array',
           items: { type: 'string' },
-          description: 'File codes (after file:) to upload to the page file chooser',
+          description: 'File codes (the 16-char segment after file:) to upload',
         },
       },
       ['codes'],
@@ -779,34 +791,173 @@ export function pwTools(): Record<string, PwTool> {
     },
   }
 
-  const handleDialogAlias = dialog
+  const drop: PwTool = {
+    description:
+      'Drop MIME-typed data (or stored files referenced as file:<code>) onto an element. Provide data (mime -> string) and/or codes.',
+    inputSchema: schema(
+      {
+        element: ELEMENT_PROP.element,
+        target: TARGET_PROP.target,
+        data: {
+          type: 'object',
+          description: 'MIME type -> string value, e.g. {"text/plain":"hello"}',
+        },
+        codes: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'Stored file codes to drop as files',
+        },
+      },
+      ['target'],
+    ),
+    exec: async (ctx, session, args) => {
+      const target = requireArg(args, 'target')
+      const data = (args['data'] ?? {}) as Record<string, string>
+      const codes = strArray(args, 'codes')
+      const files: Array<{ name: string; mime: string; b64: string }> = []
+      for (const code of codes) {
+        const got = await ctx.deps.getFile(code, session.tenant)
+        files.push({
+          name: got.name || `${code}.bin`,
+          mime: got.mime || 'application/octet-stream',
+          b64: Buffer.from(got.data).toString('base64'),
+        })
+      }
+      const locator = resolveLocator(session.page, target)
+      const handle = await session.page.evaluateHandle(
+        (payload: { data: Record<string, string>; files: typeof files }) => {
+          const dt = new DataTransfer()
+          for (const [mime, value] of Object.entries(payload.data)) {
+            dt.setData(mime, value)
+          }
+          for (const f of payload.files) {
+            const bin = atob(f.b64)
+            const bytes = new Uint8Array(bin.length)
+            for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i)
+            dt.items.add(new File([bytes], f.name, { type: f.mime }))
+          }
+          return dt
+        },
+        { data, files },
+      )
+      await locator.dispatchEvent('drop', { dataTransfer: handle })
+      return { content: `Dropped onto ${strArg(args, 'element') || target}` }
+    },
+  }
+
+  const storageState: PwTool = {
+    description:
+      'Export the context storage state (cookies + localStorage) as a file:<code> JSON reference.',
+    inputSchema: schema({}, []),
+    exec: async (ctx, session) => {
+      const state = await session.context.storageState()
+      const buf = Buffer.from(JSON.stringify(state))
+      const file = await ingest(
+        ctx,
+        session,
+        buf,
+        'application/json',
+        `storage-state-${Date.now()}.json`,
+      )
+      return {
+        content: `Storage state saved as ${file} (${buf.length} bytes)`,
+        data: { file, mime: 'application/json', bytes: buf.length },
+      }
+    },
+  }
+
+  const setStorageState: PwTool = {
+    description:
+      'Restore context storage state from a stored JSON file (file:<code>) produced by browser-storage-state. Adds the cookies and localStorage.',
+    inputSchema: schema(
+      {
+        code: {
+          type: 'string',
+          description: 'The file code (after file:) of the storage state JSON',
+        },
+      },
+      ['code'],
+    ),
+    exec: async (ctx, session, args) => {
+      const code = requireArg(args, 'code')
+      const got = await ctx.deps.getFile(code, session.tenant)
+      const parsed = JSON.parse(Buffer.from(got.data).toString()) as {
+        cookies?: Parameters<typeof session.context.addCookies>[0]
+        origins?: Array<{
+          origin: string
+          localStorage?: Array<{ name: string; value: string }>
+        }>
+      }
+      if (Array.isArray(parsed.cookies) && parsed.cookies.length > 0) {
+        await session.context.addCookies(parsed.cookies)
+      }
+      for (const o of parsed.origins ?? []) {
+        const page = await session.context.newPage()
+        try {
+          await page.goto(o.origin, { waitUntil: 'domcontentloaded' })
+          await page.evaluate((items: Array<{ name: string; value: string }>) => {
+            for (const it of items) localStorage.setItem(it.name, it.value)
+          }, o.localStorage ?? [])
+        } finally {
+          await page.close()
+        }
+      }
+      return { content: `Storage state restored from file:${code}` }
+    },
+  }
 
   return {
-    browser_create_context: ctxCreate,
-    browser_navigate: navigate,
-    browser_navigate_back: navigateBack,
-    browser_snapshot: snapshot,
-    browser_click: click,
-    browser_type: type,
-    browser_hover: hover,
-    browser_select_option: selectOption,
-    browser_take_screenshot: takeScreenshot,
-    browser_wait_for: waitFor,
-    browser_press_key: pressKey,
-    browser_evaluate: evaluate,
-    browser_resize: resize,
-    browser_tabs: tabs,
-    browser_console_messages: consoleMessages,
-    browser_network_requests: networkRequests,
-    browser_network_request: networkRequest,
-    browser_handle_dialog: handleDialogAlias,
-    browser_drag: drag,
-    browser_find: find,
-    browser_run_code_unsafe: runCodeUnsafe,
-    browser_fill_form: fillForm,
-    browser_emulate_media: emulateMedia,
-    browser_file_upload: fileUpload,
+    'browser-create-context': ctxCreate,
+    'browser-close-context': ctxClose,
+    'browser-navigate': navigate,
+    'browser-navigate-back': navigateBack,
+    'browser-snapshot': snapshot,
+    'browser-find': find,
+    'browser-click': click,
+    'browser-type': type,
+    'browser-hover': hover,
+    'browser-select-option': selectOption,
+    'browser-press-key': pressKey,
+    'browser-wait-for': waitFor,
+    'browser-resize': resize,
+    'browser-tabs': tabs,
+    'browser-drag': drag,
+    'browser-fill-form': fillForm,
+    'browser-handle-dialog': handleDialog,
+    'browser-evaluate': evaluate,
+    'browser-console-messages': consoleMessages,
+    'browser-network-requests': networkRequests,
+    'browser-network-request': networkRequest,
+    'browser-take-screenshot': takeScreenshot,
+    'browser-pdf-save': pdfSave,
+    'browser-file-upload': fileUpload,
+    'browser-drop': drop,
+    'browser-storage-state': storageState,
+    'browser-set-storage-state': setStorageState,
+    'browser-run-code-unsafe': runCodeUnsafe,
   }
+}
+
+function isStatic(r: { resourceType: string; status: number }): boolean {
+  const staticTypes = new Set(['image', 'font', 'stylesheet', 'script', 'media'])
+  return staticTypes.has(r.resourceType) && r.status < 400
+}
+
+async function ingest(
+  ctx: ToolCtx,
+  session: BrowserSession,
+  buf: Buffer,
+  mime: string,
+  name: string,
+): Promise<string> {
+  const stored = await ctx.deps.ingestFile({
+    name,
+    mime,
+    data: new Uint8Array(buf),
+    session: session.session,
+    tenant: session.tenant,
+  })
+  return `file:${stored.code}`
 }
 
 /** Parse `/pattern/flags` or a bare regex into a RegExp. */
@@ -814,12 +965,8 @@ function parseSlashRegex(raw: string): RegExp {
   if (raw.startsWith('/')) {
     const last = raw.lastIndexOf('/')
     if (last > 0) {
-      const body = raw.slice(1, last)
-      const flags = raw.slice(last + 1)
-      return new RegExp(body, flags)
+      return new RegExp(raw.slice(1, last), raw.slice(last + 1))
     }
   }
   return new RegExp(raw)
 }
-
-export { argsWithoutContext }

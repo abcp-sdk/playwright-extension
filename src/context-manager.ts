@@ -2,7 +2,7 @@ import type { Browser, BrowserContext, Page } from 'playwright-core'
 
 /**
  * One browser context, keyed by an opaque `context_id`. A context is created
- * by `browser_create_context` (which mints the key) and used by every other
+ * by `browser-create-context` (which mints the key) and used by every other
  * tool through that key. Contexts are scoped to a (tenant, session) pair so a
  * key minted in one tenant/session can never be used from another.
  */
@@ -110,7 +110,7 @@ export class ContextManager {
     const s = this.sessions.get(contextId)
     if (s === undefined) {
       throw new Error(
-        `unknown context_id ${contextId} (it may have been reaped for inactivity — call browser_create_context again)`,
+        `unknown context_id ${contextId} (it may have been reaped for inactivity — call browser-create-context again)`,
       )
     }
     if (s.tenant !== tenant || (session !== '' && s.session !== session)) {
@@ -138,7 +138,7 @@ export class ContextManager {
     }
   }
 
-  /** Explicitly close a context (browser_close_context). */
+  /** Explicitly close a context (browser-close-context). */
   async close(
     contextId: string,
     tenant: string,
@@ -149,13 +149,15 @@ export class ContextManager {
     await this.destroy(s)
   }
 
-  /** Close every context belonging to a session (lifecycle: deleted). */
-  async closeSession(tenant: string, session: string): Promise<void> {
+  /** Close every context belonging to a session (lifecycle: deleted). Returns
+   *  the number closed. */
+  async closeSession(tenant: string, session: string): Promise<number> {
     const doomed = [...this.sessions.values()].filter(
       s => s.tenant === tenant && s.session === session,
     )
     for (const s of doomed) this.sessions.delete(s.contextId)
     await Promise.all(doomed.map(s => this.destroy(s)))
+    return doomed.length
   }
 
   /** Close contexts idle beyond the configured timeout. */

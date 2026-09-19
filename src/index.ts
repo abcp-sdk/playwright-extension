@@ -63,7 +63,7 @@ export interface PlaywrightExtensionBundle {
  * Build the playwright extension over a bus. The bus is used only for the
  * agent file RPCs (screenshots/uploads); browser traffic goes over CDP.
  *
- * A single `context_id` key is minted by `browser_create_context`; every other
+ * A single `context_id` key is minted by `browser-create-context`; every other
  * tool requires it. Contexts are scoped to the calling (tenant, session) and
  * are reaped when idle or when the session is deleted.
  */
@@ -154,7 +154,9 @@ export function createPlaywrightExtension(
   }
 
   for (const [name, tool] of Object.entries(tools)) {
-    if (name === 'browser_create_context') continue
+    if (name === 'browser-create-context' || name === 'browser-close-context') {
+      continue
+    }
     specs[name] = {
       description: tool.description,
       inputSchema: tool.inputSchema,
@@ -163,7 +165,7 @@ export function createPlaywrightExtension(
         const contextId = String(args['context_id'] ?? '')
         if (contextId === '') {
           throw new Error(
-            'context_id is required — call browser_create_context first',
+            'context_id is required — call browser-create-context first',
           )
         }
         const result = await manager.withContext(
@@ -185,9 +187,9 @@ export function createPlaywrightExtension(
     }
   }
 
-  // browser_create_context is special: it mints the key and returns it.
-  const createTool = tools['browser_create_context']
-  specs['browser_create_context'] = {
+  // browser-create-context is special: it mints the key and returns it.
+  const createTool = tools['browser-create-context']
+  specs['browser-create-context'] = {
     description: createTool?.description ?? 'Create a browser context',
     inputSchema: { type: 'object', properties: {} },
     execute: async (_args, _callId, sessionName, _signal, tenant) => {
@@ -201,6 +203,28 @@ export function createPlaywrightExtension(
         content: `Created browser context. context_id: ${contextId}`,
         data: { context_id: contextId },
       }
+    },
+  }
+
+  // browser-close-context closes one context by id, or every context of the
+  // session when `all: true`.
+  const closeTool = tools['browser-close-context']
+  specs['browser-close-context'] = {
+    description: closeTool?.description ?? 'Close a browser context',
+    inputSchema: closeTool?.inputSchema ?? { type: 'object', properties: {} },
+    execute: async (args, _callId, sessionName, _signal, tenant) => {
+      const t = tenant ?? ''
+      if (args['all'] === true) {
+        const n = await manager.closeSession(t, sessionName ?? '')
+        return { content: `Closed ${n} browser context(s)` }
+      }
+      const contextId = String(args['context_id'] ?? '')
+      if (contextId === '') {
+        throw new Error('context_id is required unless all=true')
+      }
+      await manager.close(contextId, t, sessionName ?? '')
+      logsByContext.delete(contextId)
+      return { content: `Closed browser context ${contextId}` }
     },
   }
 
