@@ -12,6 +12,11 @@ ENV HTTP_PROXY=${HTTP_PROXY} \
     NO_PROXY=localhost,127.0.0.1,.svc.cluster.local,.svc \
     PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
 WORKDIR /build
+# git fetches the public `github:` git dependencies (the SDK ships raw TS and
+# is not on a registry); the https rewrite means no SSH key is needed.
+RUN apk add --no-cache git \
+    && git config --global url."https://github.com/".insteadOf "ssh://git@github.com/" \
+    && git config --global url."https://github.com/".insteadOf "git+ssh://git@github.com/"
 COPY package.json package-lock.json .npmrc tsconfig.json ./
 COPY scripts scripts
 COPY src src
