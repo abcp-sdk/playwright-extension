@@ -3,7 +3,7 @@
 # downloaded (PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD) — only playwright-core, the
 # abc protocol SDK, and this package's compiled output.
 ARG REGISTRY=docker.io
-FROM ${REGISTRY}/library/node:26-alpine AS build
+FROM ${REGISTRY}/root/node:26-alpine AS build
 ARG HTTP_PROXY
 ARG HTTPS_PROXY
 ENV HTTP_PROXY=${HTTP_PROXY} \
@@ -15,7 +15,7 @@ COPY package.json .npmrc tsconfig.json ./
 COPY src src
 RUN npm install --no-audit --strict-ssl=false && npm run build
 
-FROM ${REGISTRY}/library/alpine:3.24
+FROM ${REGISTRY}/root/alpine:3.24
 RUN sed -i 's|dl-cdn.alpinelinux.org|mirrors.aliyun.com|g' /etc/apk/repositories \
     && apk add --no-cache ca-certificates nodejs
 WORKDIR /app
