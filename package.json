@@ -21,7 +21,7 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@abc-protocol/sdk": "github:abcp-sdk/abc-protocol-typescript#v3.1.1",
+    "@abc-protocol/sdk": "github:abcp-sdk/abc-protocol-typescript#v3.2.0",
     "playwright-core": "^1.63.0",
     "zod": "^4.4.3"
   },
