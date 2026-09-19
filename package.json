@@ -1,0 +1,33 @@
+{
+  "name": "@abc-protocol/playwright-extension",
+  "version": "0.1.0",
+  "description": "Playwright browser extension server: CDP browser automation tools (navigate/snapshot/click/type/screenshot) served in-process over the abc protocol.",
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    }
+  },
+  "files": [
+    "src",
+    "manifest.yaml"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "check": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@abc-protocol/sdk": "github:abcp-sdk/abc-protocol-typescript#b5e810f03228e44aee2f90445c451348d8e3847c",
+    "playwright-core": "^1.63.0",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@types/node": "^26.2.0",
+    "typescript": "^7.0.2",
+    "vitest": "^4.1.11"
+  }
+}
