@@ -88,3 +88,57 @@ describe('ContextManager', () => {
     await m.stop()
   })
 })
+
+describe('ContextManager driver teardown', () => {
+  it('calls the per-context releaseDriver on destroy (config-change safe)', async () => {
+    const released: string[] = []
+    const m = new ContextManager({
+      idleTimeoutMs: 0,
+      maxContexts: 0,
+      createBrowser: async () => {
+        const page = { context: () => ({ close: async () => {} }) } as unknown as Page
+        const context = { pages: () => [page] } as unknown as BrowserContext
+        const browser = { close: async () => {} } as unknown as Browser
+        const id = `s${released.length}`
+        return {
+          browser,
+          context,
+          page,
+          driverSessionId: id,
+          releaseDriver: async () => {
+            released.push(id)
+          },
+        }
+      },
+      destroyBrowser: async s => {
+        // Mirrors index.ts: use the captured releaseDriver, not a factory var.
+        if (s.releaseDriver !== undefined) await s.releaseDriver()
+      },
+    })
+    await m.create('t', 's')
+    await m.stop()
+    expect(released).toEqual(['s0'])
+  })
+
+  it('passes tenant + session to createBrowser', async () => {
+    const seen: Array<[string, string]> = []
+    const m = new ContextManager({
+      idleTimeoutMs: 0,
+      maxContexts: 0,
+      createBrowser: async (tenant, session) => {
+        seen.push([tenant, session])
+        const page = { context: () => ({ close: async () => {} }) } as unknown as Page
+        return {
+          browser: {} as Browser,
+          context: {} as BrowserContext,
+          page,
+          driverSessionId: null,
+        }
+      },
+      destroyBrowser: async () => {},
+    })
+    await m.create('tenant-a', 'sess-1')
+    expect(seen).toEqual([['tenant-a', 'sess-1']])
+    await m.stop()
+  })
+})

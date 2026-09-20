@@ -39,7 +39,9 @@ export type BrowserTarget =
     }
 
 export interface PlaywrightExtensionOpts {
-  /** How to reach the browser. */
+  /** Fallback browser target when extension config sets no `selenium-url`.
+   *  Config (per tenant) takes precedence; this keeps the extension runnable
+   *  with only env (no config seeded). */
   target: BrowserTarget
   /** Per-context viewport; null uses the browser default. */
   viewport: { width: number; height: number } | null
@@ -52,7 +54,18 @@ export interface PlaywrightExtensionOpts {
   defaultTimeoutMs: number
   /** File-ingest/get deps. Defaults to the agent file RPCs (needs a bus). */
   deps?: PlaywrightDeps
+  /** Read the effective extension config (session > global > default) for a
+   *  tenant. When provided, `selenium-url` overrides the env target per call. */
+  getConfig?: (
+    name: string,
+    sessionName?: string,
+    tenant?: string,
+  ) => unknown
 }
+
+/** Config knob holding the Selenium WebDriver base URL. When set for a tenant
+ *  it overrides the extension's boot-time env target. */
+export const CONFIG_SELENIUM_URL = 'selenium-url'
 
 export interface PlaywrightExtensionBundle {
   config: ExtensionConfig
@@ -74,6 +87,10 @@ export function createPlaywrightExtension(
 ): PlaywrightExtensionBundle {
   const deps = opts.deps ?? agentFileDeps(bus)
 
+  // The browser target is resolved PER CALL: a tenant's `selenium-url` config
+  // overrides the boot-time env target. Factories are cached by base URL so
+  // repeated contexts share one Selenium attachment pool.
+  const seleniumFactories = new Map<string, SeleniumBrowserFactory>()
   const cdpFactory =
     opts.target.kind === 'cdp'
       ? new CdpBrowserFactory({
@@ -82,16 +99,32 @@ export function createPlaywrightExtension(
           ignoreHttpsErrors: opts.ignoreHttpsErrors,
         })
       : null
-  const seleniumFactory =
-    opts.target.kind === 'selenium'
-      ? new SeleniumBrowserFactory({
-          baseUrl: opts.target.baseUrl,
-          browserName: opts.target.browserName,
-          viewport: opts.viewport,
-          ignoreHttpsErrors: opts.ignoreHttpsErrors,
-          cdpTimeoutMs: opts.target.cdpTimeoutMs,
-        })
-      : null
+
+  /** Resolve the Selenium base URL for a scope: config first, then env. */
+  const seleniumUrlFor = (tenant: string, session: string): string => {
+    const cfg = opts.getConfig?.(CONFIG_SELENIUM_URL, session, tenant)
+    const s = typeof cfg === 'string' ? cfg.trim() : ''
+    if (s !== '') return s
+    return opts.target.kind === 'selenium' ? opts.target.baseUrl : ''
+  }
+
+  /** A (cached) Selenium factory for one base URL. */
+  const seleniumFactoryFor = (baseUrl: string): SeleniumBrowserFactory => {
+    let f = seleniumFactories.get(baseUrl)
+    if (f === undefined) {
+      f = new SeleniumBrowserFactory({
+        baseUrl,
+        browserName:
+          opts.target.kind === 'selenium' ? opts.target.browserName : 'chrome',
+        viewport: opts.viewport,
+        ignoreHttpsErrors: opts.ignoreHttpsErrors,
+        cdpTimeoutMs:
+          opts.target.kind === 'selenium' ? opts.target.cdpTimeoutMs : 30_000,
+      })
+      seleniumFactories.set(baseUrl, f)
+    }
+    return f
+  }
 
   // Per-context log stores, keyed by context_id (the manager owns the context
   // lifecycle; logs live alongside it).
@@ -100,14 +133,20 @@ export function createPlaywrightExtension(
   const managerOpts: ContextManagerOpts = {
     idleTimeoutMs: opts.idleTimeoutMs,
     maxContexts: opts.maxContexts,
-    createBrowser: async () => {
-      if (seleniumFactory !== null) {
-        const s = await seleniumFactory.create()
+    createBrowser: async (tenant, session) => {
+      const seleniumUrl = seleniumUrlFor(tenant, session)
+      if (seleniumUrl !== '') {
+        const factory = seleniumFactoryFor(seleniumUrl)
+        const s = await factory.create()
         return {
           browser: s.browser,
           context: s.page.context(),
           page: s.page,
           driverSessionId: s.sessionId,
+          // Bind teardown to the SAME factory instance that created it, so a
+          // later config change cannot orphan this WebDriver session.
+          releaseDriver: () =>
+            factory.deleteSession(s.sessionId).catch(() => {}),
         }
       }
       if (cdpFactory !== null) {
@@ -123,10 +162,10 @@ export function createPlaywrightExtension(
     },
     destroyBrowser: async (s: BrowserSession) => {
       logsByContext.delete(s.contextId)
-      if (s.driverSessionId !== null && seleniumFactory !== null) {
+      if (s.releaseDriver !== undefined) {
         // The WebDriver session owns the browser; deleting it closes the
         // context+pages and frees the Grid slot. Disconnect CDP after.
-        await seleniumFactory.deleteSession(s.driverSessionId).catch(() => {})
+        await s.releaseDriver()
         await s.browser.close().catch(() => {})
       } else {
         await s.page.context().close().catch(() => {})
@@ -162,6 +201,11 @@ export function createPlaywrightExtension(
     specs[name] = {
       description: tool.description,
       inputSchema: tool.inputSchema,
+      // Marking the knob required makes the agent SURFACE it in the UI
+      // (withExtConfig only attaches declared config that a tool requires) and
+      // gate the tool until set. The chart seeds it for every tenant, so the
+      // tools work out of the box; a UI-set value overrides the seed.
+      requiredConfig: [CONFIG_SELENIUM_URL],
       execute: async (args, _callId, sessionName, _signal, tenant) => {
         const t = tenant ?? ''
         const locale = await localeOf(deps, t, sessionName ?? '')
@@ -193,6 +237,7 @@ export function createPlaywrightExtension(
   specs['browser-create-context'] = {
     description: createTool?.description ?? 'Create a browser context',
     inputSchema: { type: 'object', properties: {} },
+    requiredConfig: [CONFIG_SELENIUM_URL],
     execute: async (_args, _callId, sessionName, _signal, tenant) => {
       const locale = await localeOf(deps, tenant ?? '', sessionName ?? '')
       const contextId = await manager.create(tenant ?? '', sessionName ?? '')
@@ -235,6 +280,18 @@ export function createPlaywrightExtension(
     id: 'playwright',
     version: '0.1.0',
     tools: specs,
+    config: {
+      [CONFIG_SELENIUM_URL]: {
+        type: 'string',
+        default: '',
+        scope: 'global',
+        description:
+          'Selenium WebDriver base URL the browser tools drive (e.g. http://selenium:4444). Overrides the extension env target when set.',
+        descriptions: {
+          zh: '浏览器工具所驱动的 Selenium WebDriver 基础地址（如 http://selenium:4444）。设置后覆盖扩展的环境变量目标。',
+        },
+      },
+    },
     lifecycle: ['deleted'],
     onLifecycle: async (ev, tenant) => {
       if (ev.kind !== 'deleted') return

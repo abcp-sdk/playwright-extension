@@ -12,6 +12,9 @@ export interface BrowserSession {
   session: string
   /** Selenium WebDriver session id (DELETE to close) — null for a raw CDP. */
   driverSessionId: string | null
+  /** Tears down the driver session this context was created on. Captured at
+   *  create time so a later config change cannot orphan the WebDriver slot. */
+  releaseDriver?: (() => Promise<void>) | undefined
   browser: Browser
   context: BrowserContext
   page: Page
@@ -26,12 +29,20 @@ export interface ContextManagerOpts {
   idleTimeoutMs: number
   /** Hard cap on live contexts; creating beyond it evicts the LRU idle one. */
   maxContexts: number
-  /** Create the underlying browser session (Selenium/WebDriver or raw CDP). */
-  createBrowser: () => Promise<{
+  /** Create the underlying browser session (Selenium/WebDriver or raw CDP)
+   *  for the calling (tenant, session). The target may be resolved per call
+   *  from extension config, so it receives the scope. */
+  createBrowser: (
+    tenant: string,
+    session: string,
+  ) => Promise<{
     browser: Browser
     context: BrowserContext
     page: Page
     driverSessionId: string | null
+    /** Tear down the underlying driver session (WebDriver DELETE). Captured
+     *  per session so a config change between creates cannot orphan it. */
+    releaseDriver?: () => Promise<void>
   }>
   /** Tear the underlying browser session down. */
   destroyBrowser: (s: BrowserSession) => Promise<void>
@@ -83,8 +94,8 @@ export class ContextManager {
     ) {
       await this.evictLru()
     }
-    const { browser, context, page, driverSessionId } =
-      await this.opts.createBrowser()
+    const { browser, context, page, driverSessionId, releaseDriver } =
+      await this.opts.createBrowser(tenant, session)
     const contextId = crypto.randomUUID()
     const now = Date.now()
     this.sessions.set(contextId, {
@@ -92,6 +103,7 @@ export class ContextManager {
       tenant,
       session,
       driverSessionId,
+      ...(releaseDriver !== undefined ? { releaseDriver } : {}),
       browser,
       context,
       page,
