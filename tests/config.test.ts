@@ -1,12 +1,19 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { Bus } from '@abc-protocol/sdk'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { CONFIG_SELENIUM_URL, createPlaywrightExtension } from '../src/index.js'
 
 const fakeBus = {} as unknown as Bus
 
-function build(getConfig: (name: string, session?: string, tenant?: string) => unknown) {
+function build(
+  getConfig: (name: string, session?: string, tenant?: string) => unknown,
+) {
   return createPlaywrightExtension(fakeBus, {
-    target: { kind: 'selenium', baseUrl: 'http://env-selenium:4444', browserName: 'chrome', cdpTimeoutMs: 30_000 },
+    target: {
+      kind: 'selenium',
+      baseUrl: 'http://env-selenium:4444',
+      browserName: 'chrome',
+      cdpTimeoutMs: 30_000,
+    },
     viewport: null,
     ignoreHttpsErrors: true,
     idleTimeoutMs: 0,

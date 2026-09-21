@@ -1,5 +1,5 @@
-import { afterAll, describe, expect, it } from 'vitest'
 import { Agent, connectNatsBus, start } from '@abc-protocol/sdk'
+import { afterAll, describe, expect, it } from 'vitest'
 import { servePlaywright } from '../src/serve.js'
 
 const LIVE_NATS = process.env['LIVE_NATS_URL'] ?? ''
@@ -61,7 +61,8 @@ maybe('live e2e: extension against a CDP browser', () => {
     expect(snap.content).toContain('E2E')
 
     const shot = await call('browser-take-screenshot', { context_id: cid })
-    const files = (shot.data as { files?: Array<{ code?: string }> } | null)?.files ?? []
+    const files =
+      (shot.data as { files?: Array<{ code?: string }> } | null)?.files ?? []
     expect(files[0]?.code).toMatch(/^[0-9a-f]{16}$/)
 
     // Explicit close.

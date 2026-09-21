@@ -1,6 +1,9 @@
-import { describe, expect, it, vi } from 'vitest'
 import type { Browser, BrowserContext, Page } from 'playwright-core'
-import { ContextManager, type ContextManagerOpts } from '../src/context-manager.js'
+import { describe, expect, it, vi } from 'vitest'
+import {
+  ContextManager,
+  type ContextManagerOpts,
+} from '../src/context-manager.js'
 
 /** A fake browser session factory counting creates/destroys. */
 function fakeFactory() {
@@ -44,7 +47,9 @@ describe('ContextManager', () => {
     // A different tenant/session cannot use the key.
     expect(() => m.get(id, 'tenant-b', 'sess-1')).toThrow(/does not belong/)
     expect(() => m.get(id, 'tenant-a', 'sess-2')).toThrow(/does not belong/)
-    expect(() => m.get('nope', 'tenant-a', 'sess-1')).toThrow(/unknown context_id/)
+    expect(() => m.get('nope', 'tenant-a', 'sess-1')).toThrow(
+      /unknown context_id/,
+    )
     await m.stop()
   })
 
@@ -96,7 +101,9 @@ describe('ContextManager driver teardown', () => {
       idleTimeoutMs: 0,
       maxContexts: 0,
       createBrowser: async () => {
-        const page = { context: () => ({ close: async () => {} }) } as unknown as Page
+        const page = {
+          context: () => ({ close: async () => {} }),
+        } as unknown as Page
         const context = { pages: () => [page] } as unknown as BrowserContext
         const browser = { close: async () => {} } as unknown as Browser
         const id = `s${released.length}`
@@ -127,7 +134,9 @@ describe('ContextManager driver teardown', () => {
       maxContexts: 0,
       createBrowser: async (tenant, session) => {
         seen.push([tenant, session])
-        const page = { context: () => ({ close: async () => {} }) } as unknown as Page
+        const page = {
+          context: () => ({ close: async () => {} }),
+        } as unknown as Page
         return {
           browser: {} as Browser,
           context: {} as BrowserContext,

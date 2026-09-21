@@ -3,12 +3,16 @@ import { CATALOG, tr } from '../src/i18n.js'
 
 describe('playwright i18n', () => {
   it('renders English by default', () => {
-    expect(tr('en', 'navigated', { url: 'https://x' })).toBe('Navigated to https://x')
+    expect(tr('en', 'navigated', { url: 'https://x' })).toBe(
+      'Navigated to https://x',
+    )
     expect(tr('', 'pressed', { key: 'Enter' })).toBe('Pressed Enter')
   })
 
   it('renders Chinese for zh locales', () => {
-    expect(tr('zh', 'navigated', { url: 'https://x' })).toBe('已导航至 https://x')
+    expect(tr('zh', 'navigated', { url: 'https://x' })).toBe(
+      '已导航至 https://x',
+    )
     expect(tr('zh-CN', 'resized', { w: 800, h: 600 })).toBe('已调整为 800x600')
   })
 

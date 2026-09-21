@@ -1,5 +1,9 @@
+import {
+  connectNatsBus,
+  ExtensionManifestSchema,
+  start,
+} from '@abc-protocol/sdk'
 import { afterAll, describe, expect, it } from 'vitest'
-import { ExtensionManifestSchema, connectNatsBus, start } from '@abc-protocol/sdk'
 import { servePlaywright } from '../src/serve.js'
 import { pwTools } from '../src/tools/browser.js'
 
@@ -36,10 +40,14 @@ describe('playwright extension registration', () => {
 
     let manifest = null
     for (let i = 0; i < 5 && manifest === null; i++) {
-      const replies = await bus.requestMany('abc.discover', {}, {
-        maxWaitMs: 800,
-        tenant: 'global',
-      })
+      const replies = await bus.requestMany(
+        'abc.discover',
+        {},
+        {
+          maxWaitMs: 800,
+          tenant: 'global',
+        },
+      )
       for (const env of replies) {
         const p = ExtensionManifestSchema.safeParse(env.payload)
         if (p.success && p.data.id === 'playwright') manifest = p.data

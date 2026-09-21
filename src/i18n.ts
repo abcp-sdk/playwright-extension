@@ -28,8 +28,14 @@ export const CATALOG = {
   resized: { en: 'Resized to {w}x{h}', zh: '已调整为 {w}x{h}' },
   openedTab: { en: 'Opened tab {index}', zh: '已打开标签页 {index}' },
   selectedTab: { en: 'Selected tab {index}', zh: '已选择标签页 {index}' },
-  invalidTabIndex: { en: 'invalid tab index {index}', zh: '无效的标签页索引 {index}' },
-  unknownTabsAction: { en: 'unknown tabs action: {action}', zh: '未知的 tabs 操作：{action}' },
+  invalidTabIndex: {
+    en: 'invalid tab index {index}',
+    zh: '无效的标签页索引 {index}',
+  },
+  unknownTabsAction: {
+    en: 'unknown tabs action: {action}',
+    zh: '未知的 tabs 操作：{action}',
+  },
   filled: { en: 'Filled: {fields}', zh: '已填写：{fields}' },
   nextDialog: {
     en: 'Next dialog will be {state}',
@@ -37,8 +43,14 @@ export const CATALOG = {
   },
   dialogAccepted: { en: 'accepted', zh: '接受' },
   dialogDismissed: { en: 'dismissed', zh: '关闭' },
-  provideTextOrRegex: { en: 'provide either text or regex', zh: '请提供 text 或 regex。' },
-  noRequestAtIndex: { en: 'no request at index {index}', zh: '索引 {index} 处没有请求。' },
+  provideTextOrRegex: {
+    en: 'provide either text or regex',
+    zh: '请提供 text 或 regex。',
+  },
+  noRequestAtIndex: {
+    en: 'no request at index {index}',
+    zh: '索引 {index} 处没有请求。',
+  },
   screenshotSaved: {
     en: 'Screenshot saved as file:{code} ({mime}, {bytes} bytes)',
     zh: '截图已保存为 file:{code}（{mime}，{bytes} 字节）',
@@ -66,15 +78,24 @@ export const CATALOG = {
     en: 'Created browser context. context_id: {id}',
     zh: '已创建浏览器上下文。context_id：{id}',
   },
-  closedContexts: { en: 'Closed {n} browser context(s)', zh: '已关闭 {n} 个浏览器上下文' },
-  closedContext: { en: 'Closed browser context {id}', zh: '已关闭浏览器上下文 {id}' },
+  closedContexts: {
+    en: 'Closed {n} browser context(s)',
+    zh: '已关闭 {n} 个浏览器上下文',
+  },
+  closedContext: {
+    en: 'Closed browser context {id}',
+    zh: '已关闭浏览器上下文 {id}',
+  },
   closedTab: { en: 'Closed tab', zh: '已关闭标签页' },
   waitCompleted: { en: 'Wait completed', zh: '等待完成' },
   dragged: { en: 'Dragged element', zh: '已拖拽元素' },
   noMatches: { en: 'No matches.', zh: '没有匹配项。' },
   noConsoleMessages: { en: 'No console messages.', zh: '没有控制台消息。' },
   noNetworkRequests: { en: 'No network requests.', zh: '没有网络请求。' },
-  noBrowserTarget: { en: 'no browser target configured', zh: '未配置浏览器目标。' },
+  noBrowserTarget: {
+    en: 'no browser target configured',
+    zh: '未配置浏览器目标。',
+  },
 } satisfies Catalog<string>
 
 export type MessageKey = keyof typeof CATALOG

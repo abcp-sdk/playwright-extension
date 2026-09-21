@@ -1,26 +1,26 @@
 import type { ExtensionConfig, ToolSpec } from '@abc-protocol/sdk'
-import type { PlaywrightDeps } from './deps.js'
-import { agentFileDeps } from './deps.js'
 import { CdpBrowserFactory } from './browser.js'
-import { SeleniumBrowserFactory } from './selenium.js'
-import { localeOf, tr } from './i18n.js'
 import {
-  ContextManager,
   type BrowserSession,
+  ContextManager,
   type ContextManagerOpts,
 } from './context-manager.js'
+import type { PlaywrightDeps } from './deps.js'
+import { agentFileDeps } from './deps.js'
+import { localeOf, tr } from './i18n.js'
+import { SeleniumBrowserFactory } from './selenium.js'
 import {
   type ContextLogs,
   newContextLogs,
   pwTools,
-  wirePageLogging,
   type ToolCtx,
+  wirePageLogging,
 } from './tools/browser.js'
 
-export * from './deps.js'
 export * from './browser.js'
-export * from './selenium.js'
 export * from './context-manager.js'
+export * from './deps.js'
+export * from './selenium.js'
 export * from './tools/browser.js'
 
 /** How the extension reaches the browser. */
@@ -56,11 +56,7 @@ export interface PlaywrightExtensionOpts {
   deps?: PlaywrightDeps
   /** Read the effective extension config (session > global > default) for a
    *  tenant. When provided, `selenium-url` overrides the env target per call. */
-  getConfig?: (
-    name: string,
-    sessionName?: string,
-    tenant?: string,
-  ) => unknown
+  getConfig?: (name: string, sessionName?: string, tenant?: string) => unknown
 }
 
 /** Config knob holding the Selenium WebDriver base URL. When set for a tenant
@@ -168,7 +164,10 @@ export function createPlaywrightExtension(
         await s.releaseDriver()
         await s.browser.close().catch(() => {})
       } else {
-        await s.page.context().close().catch(() => {})
+        await s.page
+          .context()
+          .close()
+          .catch(() => {})
       }
     },
     onError: () => {},

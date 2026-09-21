@@ -41,7 +41,8 @@ async function main(): Promise<void> {
     extension: {
       target,
       viewport: viewportEnv(),
-      ignoreHttpsErrors: process.env['PLAYWRIGHT_IGNORE_HTTPS_ERRORS'] !== 'false',
+      ignoreHttpsErrors:
+        process.env['PLAYWRIGHT_IGNORE_HTTPS_ERRORS'] !== 'false',
       idleTimeoutMs: intEnv('PLAYWRIGHT_IDLE_TIMEOUT_MS', 600_000),
       maxContexts: intEnv('PLAYWRIGHT_MAX_CONTEXTS', 8),
       defaultTimeoutMs: intEnv('PLAYWRIGHT_ACTION_TIMEOUT_MS', 30_000),

@@ -1,4 +1,4 @@
-import { Extension, connectNatsBus, type Bus } from '@abc-protocol/sdk'
+import { type Bus, connectNatsBus, Extension } from '@abc-protocol/sdk'
 import {
   createPlaywrightExtension,
   type PlaywrightExtensionOpts,

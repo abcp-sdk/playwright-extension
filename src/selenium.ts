@@ -1,4 +1,4 @@
-import { chromium, type Browser, type Page } from 'playwright-core'
+import { type Browser, chromium, type Page } from 'playwright-core'
 
 /**
  * Creates browser sessions by talking to a Selenium (Grid / standalone-chrome)
@@ -101,14 +101,14 @@ export class SeleniumBrowserFactory {
     let context = contexts[0]
     if (context === undefined) {
       context = await browser.newContext({
-        ...(this.opts.viewport !== null ? { viewport: this.opts.viewport } : {}),
+        ...(this.opts.viewport !== null
+          ? { viewport: this.opts.viewport }
+          : {}),
         ignoreHTTPSErrors: this.opts.ignoreHttpsErrors,
       })
     }
     const pages = context.pages()
-    const page =
-      pages[0] ??
-      (await context.newPage())
+    const page = pages[0] ?? (await context.newPage())
     page.setDefaultTimeout(30_000)
     return { sessionId, cdpUrl, browser, page }
   }

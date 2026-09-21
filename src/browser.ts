@@ -1,4 +1,4 @@
-import { chromium, type Browser, type Page } from 'playwright-core'
+import { type Browser, chromium, type Page } from 'playwright-core'
 
 /**
  * Creates browser sessions keyed by context_id. The extension is configured
@@ -32,7 +32,7 @@ export class CdpBrowserFactory {
 
   /** Lazily connect to the CDP endpoint; reused across contexts. */
   private async ensureBrowser(): Promise<Browser> {
-    if (this.browser !== null && this.browser.isConnected()) {
+    if (this.browser?.isConnected()) {
       return this.browser
     }
     if (this.connecting !== null) return this.connecting
@@ -57,9 +57,7 @@ export class CdpBrowserFactory {
   async create(): Promise<{ browser: Browser; page: Page }> {
     const browser = await this.ensureBrowser()
     const context = await browser.newContext({
-      ...(this.opts.viewport !== null
-        ? { viewport: this.opts.viewport }
-        : {}),
+      ...(this.opts.viewport !== null ? { viewport: this.opts.viewport } : {}),
       ignoreHTTPSErrors: this.opts.ignoreHttpsErrors,
       ...(this.opts.extraHTTPHeaders !== undefined
         ? { extraHTTPHeaders: this.opts.extraHTTPHeaders }
@@ -73,7 +71,10 @@ export class CdpBrowserFactory {
 
   async closePage(page: Page): Promise<void> {
     // Closing the BrowserContext tears down its pages; done by the caller.
-    await page.context().close().catch(() => {})
+    await page
+      .context()
+      .close()
+      .catch(() => {})
   }
 
   async disconnect(): Promise<void> {

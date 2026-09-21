@@ -17,19 +17,26 @@
   ],
   "scripts": {
     "build": "tsc --emitDeclarationOnly && node scripts/bundle.mjs",
-    "check": "tsc --noEmit",
-    "test": "vitest run"
+    "check": "biome check .",
+    "test": "vitest run",
+    "check:fix": "biome check --fix .",
+    "check:types": "tsc --noEmit",
+    "format": "biome format --write .",
+    "lint": "biome lint .",
+    "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
-    "@abc-protocol/sdk": "github:abcp-sdk/abc-protocol-typescript#v3.5.2",
+    "@abc-protocol/sdk": "github:abcp-sdk/abc-protocol-typescript#v3.6.0",
     "playwright-core": "^1.63.0",
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@biomejs/biome": "^2.5.9",
     "@types/node": "^26.2.0",
+    "@vitest/coverage-v8": "^4.1.11",
+    "esbuild": "^0.25.0",
     "typescript": "^7.0.2",
-    "vitest": "^4.1.11",
-    "esbuild": "^0.25.0"
+    "vitest": "^4.1.11"
   },
   "allowScripts": {
     "esbuild@0.25.12": true
