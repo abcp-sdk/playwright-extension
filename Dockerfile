@@ -19,6 +19,7 @@ RUN apk add --no-cache git \
     && git config --global url."https://github.com/".insteadOf "git+ssh://git@github.com/"
 COPY package.json package-lock.json .npmrc tsconfig.json ./
 COPY scripts scripts
+COPY manifest.yaml manifest.yaml
 COPY src src
 RUN npm install --no-audit --strict-ssl=false && npm run build
 
