@@ -90,5 +90,15 @@ describe('playwright extension registration', () => {
       t => t.name === 'browser-navigate',
     )
     expect(navigate?.input_schema?.required).toContain('context_id')
+
+    // The manifest-driven metadata must survive intact: every tool carries a
+    // description and a Chinese translation, and the config knob is exposed.
+    for (const t of manifest?.tools ?? []) {
+      expect(t.description, t.name).toBeTruthy()
+      expect(t.descriptions?.zh, t.name).toBeTruthy()
+      expect(t.required_config, t.name).toContain('selenium-url')
+    }
+    const knobNames = (manifest?.config ?? []).map(c => c.name)
+    expect(knobNames).toContain('selenium-url')
   })
 })

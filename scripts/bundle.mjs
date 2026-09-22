@@ -12,6 +12,8 @@ await build({
   target: 'node26',
   outfile: 'dist/main.js',
   external: ['playwright-core'],
+  // The manifest is imported as a raw string; inline it into the bundle.
+  loader: { '.yaml': 'text' },
   banner: {
     js: "import { createRequire as __cr } from 'node:module'; const require = __cr(import.meta.url);",
   },

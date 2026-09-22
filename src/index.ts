@@ -1,4 +1,6 @@
 import type { ExtensionConfig, ToolSpec } from '@abc-protocol/sdk'
+import { manifestConfig, parseManifest } from '@abc-protocol/sdk'
+import manifestYaml from '../manifest.yaml'
 import { CdpBrowserFactory } from './browser.js'
 import {
   type BrowserSession,
@@ -62,6 +64,9 @@ export interface PlaywrightExtensionOpts {
 /** Config knob holding the Selenium WebDriver base URL. When set for a tenant
  *  it overrides the extension's boot-time env target. */
 export const CONFIG_SELENIUM_URL = 'selenium-url'
+
+/** Tool descriptions/schemas + config knobs come from the manifest; handlers here. */
+const manifest = parseManifest(manifestYaml)
 
 export interface PlaywrightExtensionBundle {
   config: ExtensionConfig
@@ -176,7 +181,6 @@ export function createPlaywrightExtension(
   manager.start()
 
   const tools = pwTools()
-  const specs: Record<string, ToolSpec> = {}
 
   const toolCtx = (session: BrowserSession, locale: string): ToolCtx => {
     let logs = logsByContext.get(session.contextId)
@@ -193,18 +197,13 @@ export function createPlaywrightExtension(
     }
   }
 
-  for (const [name, tool] of Object.entries(tools)) {
+  // Executes keyed by tool name; metadata comes from manifest.yaml (below).
+  const handlers: Record<string, { execute: ToolSpec['execute'] }> = {}
+  for (const [name, exec] of Object.entries(tools)) {
     if (name === 'browser-create-context' || name === 'browser-close-context') {
       continue
     }
-    specs[name] = {
-      description: tool.description,
-      inputSchema: tool.inputSchema,
-      // Marking the knob required makes the agent SURFACE it in the UI
-      // (withExtConfig only attaches declared config that a tool requires) and
-      // gate the tool until set. The chart seeds it for every tenant, so the
-      // tools work out of the box; a UI-set value overrides the seed.
-      requiredConfig: [CONFIG_SELENIUM_URL],
+    handlers[name] = {
       execute: async (args, _callId, sessionName, _signal, tenant) => {
         const t = tenant ?? ''
         const locale = await localeOf(deps, t, sessionName ?? '')
@@ -220,7 +219,7 @@ export function createPlaywrightExtension(
             const ctx = toolCtx(session, locale)
             const clean = { ...args }
             delete clean['context_id']
-            return tool.exec(ctx, session, clean)
+            return exec(ctx, session, clean)
           },
         )
         return {
@@ -232,11 +231,7 @@ export function createPlaywrightExtension(
   }
 
   // browser-create-context is special: it mints the key and returns it.
-  const createTool = tools['browser-create-context']
-  specs['browser-create-context'] = {
-    description: createTool?.description ?? 'Create a browser context',
-    inputSchema: { type: 'object', properties: {} },
-    requiredConfig: [CONFIG_SELENIUM_URL],
+  handlers['browser-create-context'] = {
     execute: async (_args, _callId, sessionName, _signal, tenant) => {
       const locale = await localeOf(deps, tenant ?? '', sessionName ?? '')
       const contextId = await manager.create(tenant ?? '', sessionName ?? '')
@@ -254,10 +249,7 @@ export function createPlaywrightExtension(
 
   // browser-close-context closes one context by id, or every context of the
   // session when `all: true`.
-  const closeTool = tools['browser-close-context']
-  specs['browser-close-context'] = {
-    description: closeTool?.description ?? 'Close a browser context',
-    inputSchema: closeTool?.inputSchema ?? { type: 'object', properties: {} },
+  handlers['browser-close-context'] = {
     execute: async (args, _callId, sessionName, _signal, tenant) => {
       const t = tenant ?? ''
       const locale = await localeOf(deps, t, sessionName ?? '')
@@ -275,29 +267,14 @@ export function createPlaywrightExtension(
     },
   }
 
-  const config: ExtensionConfig = {
-    id: 'playwright',
-    version: '0.1.0',
-    tools: specs,
-    config: {
-      [CONFIG_SELENIUM_URL]: {
-        type: 'string',
-        default: '',
-        scope: 'global',
-        description:
-          'Selenium WebDriver base URL the browser tools drive (e.g. http://selenium:4444). Overrides the extension env target when set.',
-        descriptions: {
-          zh: '浏览器工具所驱动的 Selenium WebDriver 基础地址（如 http://selenium:4444）。设置后覆盖扩展的环境变量目标。',
-        },
-      },
-    },
-    lifecycle: ['deleted'],
-    onLifecycle: async (ev, tenant) => {
-      if (ev.kind !== 'deleted') return
-      // Close every browser context the deleted session owns (its context_id
-      // keys become invalid immediately).
-      await manager.closeSession(tenant ?? '', ev.session_name)
-    },
+  // Metadata (descriptions/schemas/config) from the manifest; handlers here.
+  const config: ExtensionConfig = manifestConfig(manifest, { handlers })
+  config.lifecycle = ['deleted']
+  config.onLifecycle = async (ev, tenant) => {
+    if (ev.kind !== 'deleted') return
+    // Close every browser context the deleted session owns (its context_id
+    // keys become invalid immediately).
+    await manager.closeSession(tenant ?? '', ev.session_name)
   }
 
   return {

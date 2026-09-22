@@ -1,0 +1,1037 @@
+id: playwright
+version: 0.3.3
+lifecycle: [deleted]
+
+# Tool metadata (description / schema / i18n) lives HERE; execute handlers
+# live in src/index.ts (per-domain modules). manifestConfig() joins the two,
+# so the model-facing contract (with translations) stays out of the code —
+# exactly like the bundled/worker extensions.
+
+tools:
+  - name: browser-create-context
+    description: >-
+      Create a new browser context and return its context_id. Every other browser
+      tool requires this context_id, and the context (cookies, storage, tabs)
+      persists across calls until browser-close-context, an idle timeout, or the
+      session is deleted.
+    descriptions:
+      zh: >-
+        创建一个新的浏览器上下文并返回其 context_id。其它所有浏览器工具都要求该
+        context_id，且该上下文（cookies、存储、标签页）会跨调用持续存在，直到
+        browser-close-context、空闲超时或会话被删除。
+    input_schema:
+      type: object
+      properties: {}
+    required_config: [selenium-url]
+
+  - name: browser-close-context
+    description: >-
+      Close a browser context (or all of them). Pass context_id to close one
+      context; pass all=true to close every context of this session. Closing a
+      context releases its browser (WebDriver session).
+    descriptions:
+      zh: >-
+        关闭一个浏览器上下文（或全部）。传 context_id 关闭某一个；传 all=true
+        关闭本会话的所有上下文。关闭上下文会释放其浏览器（WebDriver 会话）。
+    input_schema:
+      type: object
+      properties:
+        context_id:
+          type: string
+          description: >-
+            The context to close. Ignored when all=true.
+          descriptions:
+            zh: >-
+              要关闭的上下文。当 all=true 时忽略此项。
+        all:
+          type: boolean
+          description: >-
+            Close every context of this session instead of one.
+          descriptions:
+            zh: >-
+              关闭本会话的所有上下文而非某一个。
+      required: []
+    required_config: [selenium-url]
+
+  - name: browser-navigate
+    description: >-
+      Navigate to a URL
+    descriptions:
+      zh: >-
+        导航到某个 URL。
+    input_schema:
+      type: object
+      properties:
+        context_id:
+          type: string
+          description: >-
+            The browser context key returned by browser-create-context. Required:
+            browser sessions are created explicitly and reused across calls.
+          descriptions:
+            zh: >-
+              由 browser-create-context 返回的浏览器上下文键。必填：浏览器会话为显式创建并在多次调用间复用。
+        url:
+          type: string
+          description: >-
+            The URL to navigate to
+          descriptions:
+            zh: >-
+              要导航到的 URL。
+      required: [context_id, url]
+    required_config: [selenium-url]
+
+  - name: browser-navigate-back
+    description: >-
+      Go back to the previous page in the history
+    descriptions:
+      zh: >-
+        返回历史记录中的上一页。
+    input_schema:
+      type: object
+      properties:
+        context_id:
+          type: string
+          description: >-
+            The browser context key returned by browser-create-context. Required:
+            browser sessions are created explicitly and reused across calls.
+          descriptions:
+            zh: >-
+              由 browser-create-context 返回的浏览器上下文键。必填：浏览器会话为显式创建并在多次调用间复用。
+      required: [context_id]
+    required_config: [selenium-url]
+
+  - name: browser-snapshot
+    description: >-
+      Capture accessibility snapshot of the current page, this is better than
+      screenshot
+    descriptions:
+      zh: >-
+        捕获当前页面的无障碍快照，比截图更合适。
+    input_schema:
+      type: object
+      properties:
+        context_id:
+          type: string
+          description: >-
+            The browser context key returned by browser-create-context. Required:
+            browser sessions are created explicitly and reused across calls.
+          descriptions:
+            zh: >-
+              由 browser-create-context 返回的浏览器上下文键。必填：浏览器会话为显式创建并在多次调用间复用。
+        target:
+          type: string
+          description: >-
+            Exact target element reference from the page snapshot (e.g. "e12"), or a
+            Playwright selector.
+          descriptions:
+            zh: >-
+              页面快照中的精确目标元素引用（如 "e12"），或 Playwright 选择器。
+        depth:
+          type: number
+          description: >-
+            Limit the depth of the snapshot tree
+          descriptions:
+            zh: >-
+              限制快照树的深度。
+        boxes:
+          type: boolean
+          description: >-
+            Include each element bounding box as [box=x,y,width,height]
+          descriptions:
+            zh: >-
+              包含每个元素的边界框，格式为 [box=x,y,width,height]。
+      required: [context_id]
+    required_config: [selenium-url]
+
+  - name: browser-find
+    description: >-
+      Search the accessibility snapshot of the current page for text or a regular
+      expression. Returns matching snapshot lines.
+    descriptions:
+      zh: >-
+        在当前页面的无障碍快照中搜索文本或正则表达式。返回匹配的快照行。
+    input_schema:
+      type: object
+      properties:
+        context_id:
+          type: string
+          description: >-
+            The browser context key returned by browser-create-context. Required:
+            browser sessions are created explicitly and reused across calls.
+          descriptions:
+            zh: >-
+              由 browser-create-context 返回的浏览器上下文键。必填：浏览器会话为显式创建并在多次调用间复用。
+        text:
+          type: string
+          description: >-
+            Plain text to search for
+          descriptions:
+            zh: >-
+              要搜索的纯文本。
+        regex:
+          type: string
+          description: >-
+            Regular expression to search for
+          descriptions:
+            zh: >-
+              要搜索的正则表达式。
+      required: [context_id]
+    required_config: [selenium-url]
+
+  - name: browser-wait-for
+    description: >-
+      Wait for text to appear or disappear or a specified time to pass
+    descriptions:
+      zh: >-
+        等待文本出现或消失，或等待指定时长过去。
+    input_schema:
+      type: object
+      properties:
+        context_id:
+          type: string
+          description: >-
+            The browser context key returned by browser-create-context. Required:
+            browser sessions are created explicitly and reused across calls.
+          descriptions:
+            zh: >-
+              由 browser-create-context 返回的浏览器上下文键。必填：浏览器会话为显式创建并在多次调用间复用。
+        time:
+          type: number
+          description: >-
+            The time to wait in seconds
+          descriptions:
+            zh: >-
+              等待时长（秒）。
+        text:
+          type: string
+          description: >-
+            The text to wait for
+          descriptions:
+            zh: >-
+              要等待出现的文本。
+        textGone:
+          type: string
+          description: >-
+            The text to wait to disappear
+          descriptions:
+            zh: >-
+              要等待消失的文本。
+      required: [context_id]
+    required_config: [selenium-url]
+
+  - name: browser-resize
+    description: >-
+      Resize browser window
+    descriptions:
+      zh: >-
+        调整浏览器窗口大小。
+    input_schema:
+      type: object
+      properties:
+        context_id:
+          type: string
+          description: >-
+            The browser context key returned by browser-create-context. Required:
+            browser sessions are created explicitly and reused across calls.
+          descriptions:
+            zh: >-
+              由 browser-create-context 返回的浏览器上下文键。必填：浏览器会话为显式创建并在多次调用间复用。
+        width:
+          type: number
+          description: >-
+            Viewport width
+          descriptions:
+            zh: >-
+              视口宽度。
+        height:
+          type: number
+          description: >-
+            Viewport height
+          descriptions:
+            zh: >-
+              视口高度。
+      required: [context_id, width, height]
+    required_config: [selenium-url]
+
+  - name: browser-tabs
+    description: >-
+      List, create, close, or select a browser tab.
+    descriptions:
+      zh: >-
+        列出、新建、关闭或选择浏览器标签页。
+    input_schema:
+      type: object
+      properties:
+        context_id:
+          type: string
+          description: >-
+            The browser context key returned by browser-create-context. Required:
+            browser sessions are created explicitly and reused across calls.
+          descriptions:
+            zh: >-
+              由 browser-create-context 返回的浏览器上下文键。必填：浏览器会话为显式创建并在多次调用间复用。
+        action:
+          type: string
+          enum: [list, new, close, select]
+        index:
+          type: number
+          description: >-
+            Tab index for close/select
+          descriptions:
+            zh: >-
+              用于 close/select 的标签页下标。
+        url:
+          type: string
+          description: >-
+            URL for the new tab
+          descriptions:
+            zh: >-
+              新标签页的 URL。
+      required: [context_id, action]
+    required_config: [selenium-url]
+
+  - name: browser-click
+    description: >-
+      Perform click on a web page
+    descriptions:
+      zh: >-
+        在网页上执行点击。
+    input_schema:
+      type: object
+      properties:
+        context_id:
+          type: string
+          description: >-
+            The browser context key returned by browser-create-context. Required:
+            browser sessions are created explicitly and reused across calls.
+          descriptions:
+            zh: >-
+              由 browser-create-context 返回的浏览器上下文键。必填：浏览器会话为显式创建并在多次调用间复用。
+        element:
+          type: string
+          description: >-
+            Human-readable element description (for the interaction log).
+          descriptions:
+            zh: >-
+              便于阅读的元素描述（用于交互日志）。
+        target:
+          type: string
+          description: >-
+            Exact target element reference from the page snapshot (e.g. "e12"), or a
+            Playwright selector.
+          descriptions:
+            zh: >-
+              页面快照中的精确目标元素引用（如 "e12"），或 Playwright 选择器。
+        doubleClick:
+          type: boolean
+          description: >-
+            Perform a double click
+          descriptions:
+            zh: >-
+              执行双击。
+        button:
+          type: string
+          description: >-
+            Button to click, defaults to left
+          descriptions:
+            zh: >-
+              要点击的按钮，默认 left。
+        modifiers:
+          type: array
+          description: >-
+            Modifier keys
+          descriptions:
+            zh: >-
+              修饰键。
+          items:
+            type: string
+      required: [context_id, target]
+    required_config: [selenium-url]
+
+  - name: browser-type
+    description: >-
+      Type text into editable element
+    descriptions:
+      zh: >-
+        向可编辑元素输入文本。
+    input_schema:
+      type: object
+      properties:
+        context_id:
+          type: string
+          description: >-
+            The browser context key returned by browser-create-context. Required:
+            browser sessions are created explicitly and reused across calls.
+          descriptions:
+            zh: >-
+              由 browser-create-context 返回的浏览器上下文键。必填：浏览器会话为显式创建并在多次调用间复用。
+        element:
+          type: string
+          description: >-
+            Human-readable element description (for the interaction log).
+          descriptions:
+            zh: >-
+              便于阅读的元素描述（用于交互日志）。
+        target:
+          type: string
+          description: >-
+            Exact target element reference from the page snapshot (e.g. "e12"), or a
+            Playwright selector.
+          descriptions:
+            zh: >-
+              页面快照中的精确目标元素引用（如 "e12"），或 Playwright 选择器。
+        text:
+          type: string
+          description: >-
+            Text to type into the element
+          descriptions:
+            zh: >-
+              要输入到元素的文本。
+        submit:
+          type: boolean
+          description: >-
+            Press Enter after typing
+          descriptions:
+            zh: >-
+              输入后按 Enter。
+        slowly:
+          type: boolean
+          description: >-
+            Type one character at a time
+          descriptions:
+            zh: >-
+              逐字符输入。
+      required: [context_id, target, text]
+    required_config: [selenium-url]
+
+  - name: browser-hover
+    description: >-
+      Hover over element on page
+    descriptions:
+      zh: >-
+        在页面上悬停到元素。
+    input_schema:
+      type: object
+      properties:
+        context_id:
+          type: string
+          description: >-
+            The browser context key returned by browser-create-context. Required:
+            browser sessions are created explicitly and reused across calls.
+          descriptions:
+            zh: >-
+              由 browser-create-context 返回的浏览器上下文键。必填：浏览器会话为显式创建并在多次调用间复用。
+        element:
+          type: string
+          description: >-
+            Human-readable element description (for the interaction log).
+          descriptions:
+            zh: >-
+              便于阅读的元素描述（用于交互日志）。
+        target:
+          type: string
+          description: >-
+            Exact target element reference from the page snapshot (e.g. "e12"), or a
+            Playwright selector.
+          descriptions:
+            zh: >-
+              页面快照中的精确目标元素引用（如 "e12"），或 Playwright 选择器。
+      required: [context_id, target]
+    required_config: [selenium-url]
+
+  - name: browser-select-option
+    description: >-
+      Select an option in a dropdown
+    descriptions:
+      zh: >-
+        在下拉框中选择一个选项。
+    input_schema:
+      type: object
+      properties:
+        context_id:
+          type: string
+          description: >-
+            The browser context key returned by browser-create-context. Required:
+            browser sessions are created explicitly and reused across calls.
+          descriptions:
+            zh: >-
+              由 browser-create-context 返回的浏览器上下文键。必填：浏览器会话为显式创建并在多次调用间复用。
+        element:
+          type: string
+          description: >-
+            Human-readable element description (for the interaction log).
+          descriptions:
+            zh: >-
+              便于阅读的元素描述（用于交互日志）。
+        target:
+          type: string
+          description: >-
+            Exact target element reference from the page snapshot (e.g. "e12"), or a
+            Playwright selector.
+          descriptions:
+            zh: >-
+              页面快照中的精确目标元素引用（如 "e12"），或 Playwright 选择器。
+        values:
+          type: array
+          description: >-
+            Values to select
+          descriptions:
+            zh: >-
+              要选择的值。
+          items:
+            type: string
+      required: [context_id, target, values]
+    required_config: [selenium-url]
+
+  - name: browser-press-key
+    description: >-
+      Press a key on the keyboard
+    descriptions:
+      zh: >-
+        按下键盘上的某个键。
+    input_schema:
+      type: object
+      properties:
+        context_id:
+          type: string
+          description: >-
+            The browser context key returned by browser-create-context. Required:
+            browser sessions are created explicitly and reused across calls.
+          descriptions:
+            zh: >-
+              由 browser-create-context 返回的浏览器上下文键。必填：浏览器会话为显式创建并在多次调用间复用。
+        key:
+          type: string
+          description: >-
+            Name of the key or a character
+          descriptions:
+            zh: >-
+              按键名或字符。
+      required: [context_id, key]
+    required_config: [selenium-url]
+
+  - name: browser-drag
+    description: >-
+      Perform drag and drop between two elements
+    descriptions:
+      zh: >-
+        在两个元素之间执行拖放。
+    input_schema:
+      type: object
+      properties:
+        context_id:
+          type: string
+          description: >-
+            The browser context key returned by browser-create-context. Required:
+            browser sessions are created explicitly and reused across calls.
+          descriptions:
+            zh: >-
+              由 browser-create-context 返回的浏览器上下文键。必填：浏览器会话为显式创建并在多次调用间复用。
+        startElement:
+          type: string
+        startTarget:
+          type: string
+          description: >-
+            Exact target element reference from the page snapshot (e.g. "e12"), or a
+            Playwright selector.
+          descriptions:
+            zh: >-
+              页面快照中的精确目标元素引用（如 "e12"），或 Playwright 选择器。
+        endElement:
+          type: string
+        endTarget:
+          type: string
+          description: >-
+            Exact target element reference from the page snapshot (e.g. "e12"), or a
+            Playwright selector.
+          descriptions:
+            zh: >-
+              页面快照中的精确目标元素引用（如 "e12"），或 Playwright 选择器。
+      required: [context_id, startTarget, endTarget]
+    required_config: [selenium-url]
+
+  - name: browser-fill-form
+    description: >-
+      Fill multiple form fields
+    descriptions:
+      zh: >-
+        填写多个表单字段。
+    input_schema:
+      type: object
+      properties:
+        context_id:
+          type: string
+          description: >-
+            The browser context key returned by browser-create-context. Required:
+            browser sessions are created explicitly and reused across calls.
+          descriptions:
+            zh: >-
+              由 browser-create-context 返回的浏览器上下文键。必填：浏览器会话为显式创建并在多次调用间复用。
+        fields:
+          type: array
+          description: >-
+            Fields to fill in
+          descriptions:
+            zh: >-
+              要填写的字段。
+          items:
+            type: object
+            properties:
+              name:
+                type: string
+              target:
+                type: string
+              type:
+                type: string
+                enum: [textbox, checkbox, radio, combobox, slider]
+              value:
+                type: string
+            required: [name, target, type, value]
+      required: [context_id, fields]
+    required_config: [selenium-url]
+
+  - name: browser-handle-dialog
+    description: >-
+      Handle the next JavaScript dialog (alert/confirm/prompt): accept or dismiss
+      it.
+    descriptions:
+      zh: >-
+        处理下一个 JavaScript 对话框（alert/confirm/prompt）：接受或关闭。
+    input_schema:
+      type: object
+      properties:
+        context_id:
+          type: string
+          description: >-
+            The browser context key returned by browser-create-context. Required:
+            browser sessions are created explicitly and reused across calls.
+          descriptions:
+            zh: >-
+              由 browser-create-context 返回的浏览器上下文键。必填：浏览器会话为显式创建并在多次调用间复用。
+        accept:
+          type: boolean
+          description: >-
+            Whether to accept the dialog
+          descriptions:
+            zh: >-
+              是否接受该对话框。
+        promptText:
+          type: string
+          description: >-
+            Prompt text
+          descriptions:
+            zh: >-
+              提示文本。
+      required: [context_id, accept]
+    required_config: [selenium-url]
+
+  - name: browser-evaluate
+    description: >-
+      Evaluate JavaScript expression on page or element
+    descriptions:
+      zh: >-
+        在页面或元素上执行 JavaScript 表达式。
+    input_schema:
+      type: object
+      properties:
+        context_id:
+          type: string
+          description: >-
+            The browser context key returned by browser-create-context. Required:
+            browser sessions are created explicitly and reused across calls.
+          descriptions:
+            zh: >-
+              由 browser-create-context 返回的浏览器上下文键。必填：浏览器会话为显式创建并在多次调用间复用。
+        element:
+          type: string
+          description: >-
+            Human-readable element description (for the interaction log).
+          descriptions:
+            zh: >-
+              便于阅读的元素描述（用于交互日志）。
+        target:
+          type: string
+          description: >-
+            Exact target element reference from the page snapshot (e.g. "e12"), or a
+            Playwright selector.
+          descriptions:
+            zh: >-
+              页面快照中的精确目标元素引用（如 "e12"），或 Playwright 选择器。
+        function:
+          type: string
+          description: >-
+            () => { /* code */ } or (element) => { /* code */ }
+          descriptions:
+            zh: >-
+              () => { /* 代码 */ } 或 (element) => { /* 代码 */ }
+      required: [context_id, function]
+    required_config: [selenium-url]
+
+  - name: browser-run-code-unsafe
+    description: >-
+      Run a Playwright code snippet. Unsafe: executes arbitrary JavaScript in the
+      Playwright server process and is RCE-equivalent. Use it for anything the
+      dedicated tools do not cover (coordinates, routes, storage, media emulation,
+      assertions).
+    descriptions:
+      zh: >-
+        运行一段 Playwright 代码。不安全：会在 Playwright 服务进程中执行任意 JavaScript，等同于
+        RCE。用于专用工具未覆盖的场景（坐标、路由、存储、媒体模拟、断言）。
+    input_schema:
+      type: object
+      properties:
+        context_id:
+          type: string
+          description: >-
+            The browser context key returned by browser-create-context. Required:
+            browser sessions are created explicitly and reused across calls.
+          descriptions:
+            zh: >-
+              由 browser-create-context 返回的浏览器上下文键。必填：浏览器会话为显式创建并在多次调用间复用。
+        code:
+          type: string
+          description: >-
+            A JavaScript function receiving `page` as its single argument
+          descriptions:
+            zh: >-
+              接收 `page` 作为唯一参数的 JavaScript 函数。
+      required: [context_id, code]
+    required_config: [selenium-url]
+
+  - name: browser-console-messages
+    description: >-
+      Returns all console messages
+    descriptions:
+      zh: >-
+        返回所有控制台消息。
+    input_schema:
+      type: object
+      properties:
+        context_id:
+          type: string
+          description: >-
+            The browser context key returned by browser-create-context. Required:
+            browser sessions are created explicitly and reused across calls.
+          descriptions:
+            zh: >-
+              由 browser-create-context 返回的浏览器上下文键。必填：浏览器会话为显式创建并在多次调用间复用。
+        level:
+          type: string
+          enum: [error, warning, info, debug]
+          description: >-
+            Minimum level to return. Defaults to info.
+          descriptions:
+            zh: >-
+              返回的最低级别。默认 info。
+        all:
+          type: boolean
+          description: >-
+            Return all messages since the context was created
+          descriptions:
+            zh: >-
+              返回自上下文创建以来的所有消息。
+      required: [context_id]
+    required_config: [selenium-url]
+
+  - name: browser-network-requests
+    description: >-
+      Returns a numbered list of network requests since loading the page.
+    descriptions:
+      zh: >-
+        返回自页面加载以来的网络请求编号列表。
+    input_schema:
+      type: object
+      properties:
+        context_id:
+          type: string
+          description: >-
+            The browser context key returned by browser-create-context. Required:
+            browser sessions are created explicitly and reused across calls.
+          descriptions:
+            zh: >-
+              由 browser-create-context 返回的浏览器上下文键。必填：浏览器会话为显式创建并在多次调用间复用。
+        static:
+          type: boolean
+          description: >-
+            Include successful static resources. Defaults to false.
+          descriptions:
+            zh: >-
+              包含成功的静态资源。默认 false。
+        filter:
+          type: string
+          description: >-
+            Only URLs matching this regexp
+          descriptions:
+            zh: >-
+              仅匹配该正则的 URL。
+      required: [context_id]
+    required_config: [selenium-url]
+
+  - name: browser-network-request
+    description: >-
+      Returns full details (headers) of a single network request. Use the number
+      from browser-network-requests.
+    descriptions:
+      zh: >-
+        返回单个网络请求的完整详情（请求头）。使用 browser-network-requests 给出的编号。
+    input_schema:
+      type: object
+      properties:
+        context_id:
+          type: string
+          description: >-
+            The browser context key returned by browser-create-context. Required:
+            browser sessions are created explicitly and reused across calls.
+          descriptions:
+            zh: >-
+              由 browser-create-context 返回的浏览器上下文键。必填：浏览器会话为显式创建并在多次调用间复用。
+        index:
+          type: number
+          description: >-
+            1-based index from browser-network-requests
+          descriptions:
+            zh: >-
+              来自 browser-network-requests 的、从 1 开始的编号。
+        part:
+          type: string
+          enum: [request-headers, response-headers]
+      required: [context_id, index]
+    required_config: [selenium-url]
+
+  - name: browser-take-screenshot
+    description: >-
+      Take a screenshot of the current page. The image is stored and returned as a
+      file:<code> reference (like image generation); use browser-snapshot for
+      actions.
+    descriptions:
+      zh: >-
+        对当前页面截图。图片会被存储并以 file:<code> 引用返回（与图像生成一致）；执行操作用 browser-snapshot。
+    input_schema:
+      type: object
+      properties:
+        context_id:
+          type: string
+          description: >-
+            The browser context key returned by browser-create-context. Required:
+            browser sessions are created explicitly and reused across calls.
+          descriptions:
+            zh: >-
+              由 browser-create-context 返回的浏览器上下文键。必填：浏览器会话为显式创建并在多次调用间复用。
+        element:
+          type: string
+          description: >-
+            Human-readable element description (for the interaction log).
+          descriptions:
+            zh: >-
+              便于阅读的元素描述（用于交互日志）。
+        target:
+          type: string
+          description: >-
+            Exact target element reference from the page snapshot (e.g. "e12"), or a
+            Playwright selector.
+          descriptions:
+            zh: >-
+              页面快照中的精确目标元素引用（如 "e12"），或 Playwright 选择器。
+        type:
+          type: string
+          enum: [png, jpeg, webp]
+          description: >-
+            Image format
+          descriptions:
+            zh: >-
+              图片格式。
+        fullPage:
+          type: boolean
+          description: >-
+            Capture the full scrollable page
+          descriptions:
+            zh: >-
+              捕获整个可滚动页面。
+      required: [context_id]
+    required_config: [selenium-url]
+
+  - name: browser-pdf-save
+    description: >-
+      Save the page as a PDF (headless Chromium only). The PDF is stored and
+      returned as a file:<code> reference.
+    descriptions:
+      zh: >-
+        将页面另存为 PDF（仅无头 Chromium）。PDF 会被存储并以 file:<code> 引用返回。
+    input_schema:
+      type: object
+      properties:
+        context_id:
+          type: string
+          description: >-
+            The browser context key returned by browser-create-context. Required:
+            browser sessions are created explicitly and reused across calls.
+          descriptions:
+            zh: >-
+              由 browser-create-context 返回的浏览器上下文键。必填：浏览器会话为显式创建并在多次调用间复用。
+        format:
+          type: string
+          description: >-
+            Paper format, e.g. A4, Letter (default: browser default).
+          descriptions:
+            zh: >-
+              纸张格式，如 A4、Letter（默认：浏览器默认）。
+        landscape:
+          type: boolean
+          description: >-
+            Landscape orientation
+          descriptions:
+            zh: >-
+              横向。
+        printBackground:
+          type: boolean
+          description: >-
+            Print background graphics (default false)
+          descriptions:
+            zh: >-
+              打印背景图形（默认 false）。
+      required: [context_id]
+    required_config: [selenium-url]
+
+  - name: browser-file-upload
+    description: >-
+      Upload one or more stored files (referenced as file:<code>) to the page file
+      chooser / first file input.
+    descriptions:
+      zh: >-
+        将一个或多个已存储文件（以 file:<code> 引用）上传到页面的文件选择器/第一个文件输入框。
+    input_schema:
+      type: object
+      properties:
+        context_id:
+          type: string
+          description: >-
+            The browser context key returned by browser-create-context. Required:
+            browser sessions are created explicitly and reused across calls.
+          descriptions:
+            zh: >-
+              由 browser-create-context 返回的浏览器上下文键。必填：浏览器会话为显式创建并在多次调用间复用。
+        codes:
+          type: array
+          description: >-
+            File codes (the 16-char segment after file:) to upload
+          descriptions:
+            zh: >-
+              要上传的文件 code（file: 之后的 16 位片段）。
+          items:
+            type: string
+      required: [context_id, codes]
+    required_config: [selenium-url]
+
+  - name: browser-drop
+    description: >-
+      Drop MIME-typed data (or stored files referenced as file:<code>) onto an
+      element. Provide data (mime -> string) and/or codes.
+    descriptions:
+      zh: >-
+        将带 MIME 类型的数据（或以 file:<code> 引用的已存储文件）拖放到某元素上。提供 data（mime -> 字符串）和/或 codes。
+    input_schema:
+      type: object
+      properties:
+        context_id:
+          type: string
+          description: >-
+            The browser context key returned by browser-create-context. Required:
+            browser sessions are created explicitly and reused across calls.
+          descriptions:
+            zh: >-
+              由 browser-create-context 返回的浏览器上下文键。必填：浏览器会话为显式创建并在多次调用间复用。
+        element:
+          type: string
+          description: >-
+            Human-readable element description (for the interaction log).
+          descriptions:
+            zh: >-
+              便于阅读的元素描述（用于交互日志）。
+        target:
+          type: string
+          description: >-
+            Exact target element reference from the page snapshot (e.g. "e12"), or a
+            Playwright selector.
+          descriptions:
+            zh: >-
+              页面快照中的精确目标元素引用（如 "e12"），或 Playwright 选择器。
+        data:
+          type: object
+          description: >-
+            MIME type -> string value, e.g. {"text/plain":"hello"}
+          descriptions:
+            zh: >-
+              MIME 类型 -> 字符串值，例如 {"text/plain":"hello"}。
+        codes:
+          type: array
+          description: >-
+            Stored file codes to drop as files
+          descriptions:
+            zh: >-
+              要作为文件拖放的已存储 code。
+          items:
+            type: string
+      required: [context_id, target]
+    required_config: [selenium-url]
+
+  - name: browser-storage-state
+    description: >-
+      Export the context storage state (cookies + localStorage) as a file:<code>
+      JSON reference.
+    descriptions:
+      zh: >-
+        将上下文的存储状态（cookies + localStorage）导出为 file:<code> 的 JSON 引用。
+    input_schema:
+      type: object
+      properties:
+        context_id:
+          type: string
+          description: >-
+            The browser context key returned by browser-create-context. Required:
+            browser sessions are created explicitly and reused across calls.
+          descriptions:
+            zh: >-
+              由 browser-create-context 返回的浏览器上下文键。必填：浏览器会话为显式创建并在多次调用间复用。
+      required: [context_id]
+    required_config: [selenium-url]
+
+  - name: browser-set-storage-state
+    description: >-
+      Restore context storage state from a stored JSON file (file:<code>) produced
+      by browser-storage-state. Adds the cookies and localStorage.
+    descriptions:
+      zh: >-
+        从 browser-storage-state 生成的已存储 JSON 文件（file:<code>）恢复上下文存储状态。会添加 cookies 与
+        localStorage。
+    input_schema:
+      type: object
+      properties:
+        context_id:
+          type: string
+          description: >-
+            The browser context key returned by browser-create-context. Required:
+            browser sessions are created explicitly and reused across calls.
+          descriptions:
+            zh: >-
+              由 browser-create-context 返回的浏览器上下文键。必填：浏览器会话为显式创建并在多次调用间复用。
+        code:
+          type: string
+          description: >-
+            The file code (after file:) of the storage state JSON
+          descriptions:
+            zh: >-
+              存储状态 JSON 的文件 code（file: 之后的部分）。
+      required: [context_id, code]
+    required_config: [selenium-url]
+
+config:
+  - name: selenium-url
+    type: string
+    scope: global
+    default: ''
+    description: >-
+      Selenium WebDriver base URL the browser tools drive (e.g.
+      http://selenium:4444). Overrides the extension env target when set.
+    descriptions:
+      zh: >-
+        浏览器工具所驱动的 Selenium WebDriver 基础地址（如 http://selenium:4444）。设置后覆盖扩展的环境变量目标。

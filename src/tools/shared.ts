@@ -124,48 +124,6 @@ export type Exec = (
   args: Record<string, unknown>,
 ) => Promise<{ content: string; data?: unknown }>
 
-export interface PwTool {
-  description: string
-  inputSchema: Record<string, unknown>
-  exec: Exec
-}
-
-export const CONTEXT_PROP = {
-  context_id: {
-    type: 'string',
-    description:
-      'The browser context key returned by browser-create-context. Required: browser sessions are created explicitly and reused across calls.',
-  },
-} as const
-
-export const TARGET_PROP = {
-  target: {
-    type: 'string',
-    description:
-      'Exact target element reference from the page snapshot (e.g. "e12"), or a Playwright selector.',
-  },
-} as const
-
-export const ELEMENT_PROP = {
-  element: {
-    type: 'string',
-    description:
-      'Human-readable element description (for the interaction log).',
-  },
-} as const
-
-/** Compose a tool schema: context_id is always present + required. */
-export function schema(
-  properties: Record<string, unknown>,
-  required: string[],
-): Record<string, unknown> {
-  return {
-    type: 'object',
-    properties: { ...CONTEXT_PROP, ...properties },
-    required: ['context_id', ...required],
-  }
-}
-
 /** Parse `/pattern/flags` or a bare regex into a RegExp. */
 export function parseSlashRegex(raw: string): RegExp {
   if (raw.startsWith('/')) {
