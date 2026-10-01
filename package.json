@@ -26,7 +26,7 @@
     "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
-    "@abc-protocol/sdk": "github:abcp-sdk/abc-protocol-typescript#v3.7.0",
+    "@abc-protocol/sdk": "github:abcp-sdk/abc-protocol-typescript#v3.8.0",
     "playwright-core": "^1.63.0",
     "zod": "^4.4.3"
   },
